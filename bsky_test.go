@@ -1,0 +1,66 @@
+package bsky
+
+import (
+	"os"
+	"testing"
+)
+
+func TestNewClient(t *testing.T) {
+	server := os.Getenv("BSKY_SERVER")
+	handle := os.Getenv("BSKY_HANDLE")
+	password := os.Getenv("BSKY_PASSWORD")
+	client, err := NewClient(server, handle, password)
+	if err != nil {
+		t.Fatalf("wanted no error, got %v", err)
+	}
+	if client.server != server {
+		t.Errorf("wanted server '%s', got %s", server, client.server)
+	}
+	if client.handle != handle {
+		t.Errorf("wanted handle '%s', got %s", handle, client.handle)
+	}
+	if client.password != password {
+		t.Errorf("wanted password '%s', got %s", password, client.password)
+	}
+}
+
+func TestLogin(t *testing.T) {
+	server := os.Getenv("BSKY_SERVER")
+	handle := os.Getenv("BSKY_HANDLE")
+	password := os.Getenv("BSKY_PASSWORD")
+	client, err := NewClient(server, handle, password)
+	if err != nil {
+		t.Fatalf("wanted no error, got %v", err)
+	}
+	loggedIn, err := client.Login()
+	if err != nil {
+		t.Fatalf("wanted no error, got %v", err)
+	}
+	if !loggedIn {
+		t.Error("wanted logged in to be true, got false")
+	}
+}
+
+func TestPost(t *testing.T) {
+	server := os.Getenv("BSKY_SERVER")
+	handle := os.Getenv("BSKY_HANDLE")
+	password := os.Getenv("BSKY_PASSWORD")
+	client, err := NewClient(server, handle, password)
+	if err != nil {
+		t.Fatalf("wanted no error, got %v", err)
+	}
+	loggedIn, err := client.Login()
+	if err != nil {
+		t.Fatalf("wanted no error, got %v", err)
+	}
+	if !loggedIn {
+		t.Error("wanted logged in to be true, got false")
+	}
+
+	content := "Hello, world!"
+	_, err = client.Post(content)
+	if err != nil {
+		t.Fatalf("wanted no error, got %v", err)
+	}
+
+}
