@@ -92,7 +92,7 @@ func TestPostWithLinks(t *testing.T) {
 }
 
 func TestPostWithMentions(t *testing.T) {
-	// t.Skip("Skipping test for posting mentions")
+	t.Skip("Skipping test for posting mentions")
 	server := os.Getenv("BSKY_SERVER")
 	handle := os.Getenv("BSKY_HANDLE")
 	password := os.Getenv("BSKY_PASSWORD")
@@ -109,6 +109,31 @@ func TestPostWithMentions(t *testing.T) {
 	}
 
 	content := "Mention test: @itodd.dev @golang.org"
+	pb := NewPostBuilder(content)
+	_, err = client.Post(pb)
+	if err != nil {
+		t.Fatalf("wanted no error, got %v", err)
+	}
+}
+
+func TestPostWithMentionsAndLinks(t *testing.T) {
+	t.Skip("Skipping test for posting mentions and links")
+	server := os.Getenv("BSKY_SERVER")
+	handle := os.Getenv("BSKY_HANDLE")
+	password := os.Getenv("BSKY_PASSWORD")
+	client, err := NewClient(server, handle, password)
+	if err != nil {
+		t.Fatalf("wanted no error, got %v", err)
+	}
+	loggedIn, err := client.Login()
+	if err != nil {
+		t.Fatalf("wanted no error, got %v", err)
+	}
+	if !loggedIn {
+		t.Error("wanted logged in to be true, got false")
+	}
+
+	content := "Mention and link test: @itodd.dev https://go.dev @golang.org https://pkg.go.dev"
 	pb := NewPostBuilder(content)
 	_, err = client.Post(pb)
 	if err != nil {

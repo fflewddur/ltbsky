@@ -48,7 +48,6 @@ type SessionResponse struct {
 // Login logs in to the server using the provided handle and password.
 func (c *Client) Login() (bool, error) {
 	url := fmt.Sprintf("%s/xrpc/com.atproto.server.createSession", c.server)
-	log.Printf("Logging in to %s with handle %s", url, c.handle)
 	requestBody := map[string]string{
 		"identifier": c.handle,
 		"password":   c.password,
@@ -71,18 +70,16 @@ func (c *Client) Login() (bool, error) {
 	if resp.StatusCode != http.StatusOK {
 		return false, fmt.Errorf("login failed with status code: %d", resp.StatusCode)
 	}
-	b, err := io.ReadAll(resp.Body) // Read the response body to ensure we consume it
+	b, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return false, fmt.Errorf("error reading response body: %w", err)
 	}
-	// log.Printf("Login response: %s", string(b))
 	var sessionResponse SessionResponse
 	if err := json.Unmarshal(b, &sessionResponse); err != nil {
 		return false, fmt.Errorf("error unmarshaling response: %w", err)
 	}
 	c.accessToken = sessionResponse.AccessJwt
-	// log.Printf("Access JWT: %s\nRefresh JWT: %s", sessionResponse.AccessJwt, sessionResponse.RefreshJwt)
-	return true, nil // Simulate a successful login for now
+	return true, nil
 }
 
 // PostResponse represents the response from the server after a successful post.
@@ -93,9 +90,9 @@ type PostResponse struct {
 }
 
 type PostRequest struct {
-	Repo       string `json:"repo"`
-	Collection string `json:"collection"`
-	Record     Record `json:"record"`
+	Repo       string  `json:"repo"`
+	Collection string  `json:"collection"`
+	Record     *Record `json:"record"`
 }
 
 type Record struct {
@@ -126,7 +123,7 @@ type Feature struct {
 // Post creates a new post with the given content.
 func (c *Client) Post(pb *PostBuilder) (string, error) {
 	url := fmt.Sprintf("%s/xrpc/com.atproto.repo.createRecord", c.server)
-	pr, err := pb.Build()
+	pr, err := pb.BuildFor(c.server)
 	if err != nil {
 		return "", fmt.Errorf("error building post request: %w", err)
 	}
@@ -187,9 +184,9 @@ func (pb *PostBuilder) AddImageFromBytes(data []byte) *PostBuilder {
 	return pb
 }
 
-func (pb *PostBuilder) Build() (*PostRequest, error) {
+func (pb *PostBuilder) BuildFor(server string) (*PostRequest, error) {
 	createdAt := time.Now().UTC().Format(time.RFC3339)
-	record := Record{
+	record := &Record{
 		Type:      "app.bsky.feed.post",
 		Text:      pb.content,
 		CreatedAt: createdAt,
@@ -210,7 +207,7 @@ func (pb *PostBuilder) Build() (*PostRequest, error) {
 		}
 	}
 	pb.parseLinks()
-	pb.parseMentions()
+	pb.parseMentions(server)
 	if len(pb.facets) > 0 {
 		record.Facets = make([]Facet, len(pb.facets))
 		for i, f := range pb.facets {
@@ -236,27 +233,21 @@ func (pb *PostBuilder) parseLinks() {
 		return
 	}
 	matches := r.FindAllSubmatchIndex([]byte(pb.content), -1)
-	if matches != nil {
-		log.Printf("Found %d links in content", len(matches))
-		for _, match := range matches {
-			start := match[2] // start position of the 'url' group
-			end := match[3]
-			link := pb.content[start:end]
-			log.Printf("Found link: %s at positions %d-%d", link, start, end)
-			f := &Facet{
-				Index: Index{ByteStart: start, ByteEnd: end},
-				Features: []Feature{
-					{Type: "app.bsky.richtext.facet#link", Uri: link},
-				},
-			}
-			pb.facets = append(pb.facets, f)
+	for _, match := range matches {
+		start := match[2] // start position of the 'url' group
+		end := match[3]
+		link := pb.content[start:end]
+		f := &Facet{
+			Index: Index{ByteStart: start, ByteEnd: end},
+			Features: []Feature{
+				{Type: "app.bsky.richtext.facet#link", Uri: link},
+			},
 		}
-	} else {
-		log.Println("No links found in content")
+		pb.facets = append(pb.facets, f)
 	}
 }
 
-func (pb *PostBuilder) parseMentions() {
+func (pb *PostBuilder) parseMentions(server string) {
 	// regex based on: https://atproto.com/specs/handle#handle-identifier-syntax
 	handle_regex := `[$|\W](?P<handle>@([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)`
 	r, err := regexp.Compile(handle_regex)
@@ -266,23 +257,46 @@ func (pb *PostBuilder) parseMentions() {
 	}
 	matches := r.FindAllSubmatchIndex([]byte(pb.content), -1)
 	if matches != nil {
-		log.Printf("Found %d mentions in content", len(matches))
-		// c := &http.Client{}
+		c := &http.Client{}
 		for _, match := range matches {
 			start := match[2] // start position of the 'handle' group
 			end := match[3]
-			handle := pb.content[start:end]
-			log.Printf("Found mention: %s at positions %d-%d", handle, start, end)
-
+			handle := pb.content[start+1 : end] // +1 to skip the '@' character
+			url := fmt.Sprintf("%s/xrpc/com.atproto.identity.resolveHandle?handle=%s", server, handle)
+			req, err := http.NewRequest("GET", url, nil)
+			if err != nil {
+				log.Printf("Error creating request for handle %s: %v", handle, err)
+				continue
+			}
+			resp, err := c.Do(req)
+			if err != nil {
+				log.Printf("Error making request for handle %s: %v", handle, err)
+				continue
+			}
+			defer resp.Body.Close()
+			if resp.StatusCode != http.StatusOK {
+				log.Printf("Failed to resolve handle %s with status code: %d", handle, resp.StatusCode)
+				continue
+			}
+			b, err := io.ReadAll(resp.Body)
+			if err != nil {
+				log.Printf("Error reading response body for handle %s: %v", handle, err)
+				continue
+			}
+			var resolveResponse struct {
+				Did string `json:"did"`
+			}
+			if err := json.Unmarshal(b, &resolveResponse); err != nil {
+				log.Printf("Error unmarshaling response for handle %s: %v", handle, err)
+				continue
+			}
 			f := &Facet{
 				Index: Index{ByteStart: start, ByteEnd: end},
 				Features: []Feature{
-					{Type: "app.bsky.richtext.facet#mention", Handle: handle},
+					{Type: "app.bsky.richtext.facet#mention", Did: resolveResponse.Did},
 				},
 			}
 			pb.facets = append(pb.facets, f)
 		}
-	} else {
-		log.Println("No mentions found in content")
 	}
 }
