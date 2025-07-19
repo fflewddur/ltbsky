@@ -228,19 +228,19 @@ func (pb *PostBuilder) Build() (*PostRequest, error) {
 }
 
 func (pb *PostBuilder) parseLinks() {
-	// regex from https://docs.bsky.app/docs/advanced-guides/posts#mentions-and-links
-	url_regex := `[$|\W](https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*[-a-zA-Z0-9@%_\+~#//=])?)`
+	// regex based on: https://docs.bsky.app/docs/advanced-guides/posts#mentions-and-links
+	url_regex := `[$|\W](?P<url>https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*[-a-zA-Z0-9@%_\+~#//=])?)`
 	r, err := regexp.Compile(url_regex)
 	if err != nil {
 		log.Printf("Error compiling regex: %v", err)
 		return
 	}
-	matches := r.FindAllStringIndex(pb.content, -1)
+	matches := r.FindAllSubmatchIndex([]byte(pb.content), -1)
 	if matches != nil {
 		log.Printf("Found %d links in content", len(matches))
 		for _, match := range matches {
-			start := match[0] + 1
-			end := match[1]
+			start := match[2] // start position of the 'url' group
+			end := match[3]
 			link := pb.content[start:end]
 			log.Printf("Found link: %s at positions %d-%d", link, start, end)
 			f := &Facet{
@@ -257,6 +257,32 @@ func (pb *PostBuilder) parseLinks() {
 }
 
 func (pb *PostBuilder) parseMentions() {
-	// TODO
+	// regex based on: https://atproto.com/specs/handle#handle-identifier-syntax
+	handle_regex := `[$|\W](?P<handle>@([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)`
+	r, err := regexp.Compile(handle_regex)
+	if err != nil {
+		log.Printf("Error compiling regex: %v", err)
+		return
+	}
+	matches := r.FindAllSubmatchIndex([]byte(pb.content), -1)
+	if matches != nil {
+		log.Printf("Found %d mentions in content", len(matches))
+		// c := &http.Client{}
+		for _, match := range matches {
+			start := match[2] // start position of the 'handle' group
+			end := match[3]
+			handle := pb.content[start:end]
+			log.Printf("Found mention: %s at positions %d-%d", handle, start, end)
 
+			f := &Facet{
+				Index: Index{ByteStart: start, ByteEnd: end},
+				Features: []Feature{
+					{Type: "app.bsky.richtext.facet#mention", Handle: handle},
+				},
+			}
+			pb.facets = append(pb.facets, f)
+		}
+	} else {
+		log.Println("No mentions found in content")
+	}
 }
