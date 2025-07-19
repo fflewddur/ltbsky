@@ -42,6 +42,7 @@ func TestLogin(t *testing.T) {
 }
 
 func TestPost(t *testing.T) {
+	t.Skip("Skipping test for posting, requires environment variables")
 	server := os.Getenv("BSKY_SERVER")
 	handle := os.Getenv("BSKY_HANDLE")
 	password := os.Getenv("BSKY_PASSWORD")
@@ -58,9 +59,34 @@ func TestPost(t *testing.T) {
 	}
 
 	content := "Hello, world!"
-	_, err = client.Post(content)
+	pb := NewPostBuilder(content)
+	_, err = client.Post(pb)
 	if err != nil {
 		t.Fatalf("wanted no error, got %v", err)
 	}
+}
 
+func TestPostWithLinks(t *testing.T) {
+	// t.Skip("Skipping test for posting links, requires environment variables")
+	server := os.Getenv("BSKY_SERVER")
+	handle := os.Getenv("BSKY_HANDLE")
+	password := os.Getenv("BSKY_PASSWORD")
+	client, err := NewClient(server, handle, password)
+	if err != nil {
+		t.Fatalf("wanted no error, got %v", err)
+	}
+	loggedIn, err := client.Login()
+	if err != nil {
+		t.Fatalf("wanted no error, got %v", err)
+	}
+	if !loggedIn {
+		t.Error("wanted logged in to be true, got false")
+	}
+
+	content := "Link test: https://go.dev https://pkg.go.dev"
+	pb := NewPostBuilder(content)
+	_, err = client.Post(pb)
+	if err != nil {
+		t.Fatalf("wanted no error, got %v", err)
+	}
 }
