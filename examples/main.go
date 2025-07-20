@@ -8,11 +8,11 @@ import (
 )
 
 func main() {
-	// basicExample()
-	imageExample()
+	// BasicExample()
+	ImageExample()
 }
 
-func basicExample() {
+func BasicExample() {
 	log.Println("bsky basic example")
 	server := os.Getenv("BSKY_SERVER")
 	handle := os.Getenv("BSKY_HANDLE")
@@ -46,7 +46,7 @@ func basicExample() {
 	log.Println("bsky test completed")
 }
 
-func imageExample() {
+func ImageExample() {
 	log.Println("bsky image example")
 	server := os.Getenv("BSKY_SERVER")
 	handle := os.Getenv("BSKY_HANDLE")
