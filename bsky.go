@@ -3,6 +3,7 @@ package bsky
 import (
 	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"log"
@@ -65,7 +66,9 @@ func (c *Client) Login() (bool, error) {
 	if err != nil {
 		return false, fmt.Errorf("error making request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		err = errors.Join(err, resp.Body.Close())
+	}()
 
 	if resp.StatusCode != http.StatusOK {
 		return false, fmt.Errorf("login failed with status code: %d", resp.StatusCode)
@@ -79,7 +82,7 @@ func (c *Client) Login() (bool, error) {
 		return false, fmt.Errorf("error unmarshaling response: %w", err)
 	}
 	c.accessToken = sessionResponse.AccessJwt
-	return true, nil
+	return (err != nil), err
 }
 
 // PostResponse represents the response from the server after a successful post.
@@ -143,7 +146,9 @@ func (c *Client) Post(pb *PostBuilder) (string, error) {
 	if err != nil {
 		return "", fmt.Errorf("error making request: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() {
+		err = errors.Join(err, resp.Body.Close())
+	}()
 
 	b, err := io.ReadAll(resp.Body) // Read the response body to ensure we consume it
 	if err != nil {
@@ -273,7 +278,10 @@ func (pb *PostBuilder) parseMentions(server string) {
 				log.Printf("Error making request for handle %s: %v", handle, err)
 				continue
 			}
-			defer resp.Body.Close()
+			defer func() {
+				err = errors.Join(err, resp.Body.Close())
+			}()
+
 			if resp.StatusCode != http.StatusOK {
 				log.Printf("Failed to resolve handle %s with status code: %d", handle, resp.StatusCode)
 				continue
