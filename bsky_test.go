@@ -181,3 +181,29 @@ func TestPostBuilderAddLang(t *testing.T) {
 		t.Errorf("wanted langs ['en', 'fr'], got %v", pb.langs)
 	}
 }
+
+func TestPostBuilderAddImage(t *testing.T) {
+	pb := NewPostBuilder("Test content")
+	if len(pb.imagePaths) != 0 {
+		t.Errorf("wanted no image paths, got %d", len(pb.imagePaths))
+	}
+	path := "./test-data/bsky-go-1.jpg"
+	alt := "Test image"
+	pb.AddImageFromPath(path, alt)
+	if len(pb.imagePaths) != 1 || pb.imagePaths[0] != path {
+		t.Errorf("wanted image paths ['%s'], got %v", path, pb.imagePaths)
+	}
+	path = "./test-data/bsky-go-1.png"
+	alt = "Another test image"
+	pb.AddImageFromPath(path, alt)
+	if len(pb.imagePaths) != 2 || pb.imagePaths[1] != path {
+		t.Errorf("wanted image paths ['%s'], got %v", path, pb.imagePaths)
+	}
+	_, err := pb.BuildFor("https://bsky.social")
+	if err != nil {
+		t.Fatalf("wanted no error, got %v", err)
+	}
+	if len(pb.imageBytes) != 2 {
+		t.Errorf("wanted len(imageBytes) = 2, got %d", len(pb.imageBytes))
+	}
+}

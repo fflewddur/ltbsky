@@ -5,11 +5,19 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"image"
 	"io"
 	"log"
 	"net/http"
+	"os"
 	"regexp"
 	"time"
+
+	"image/gif"
+	"image/jpeg"
+	"image/png"
+
+	"golang.org/x/image/draw"
 )
 
 type Client struct {
@@ -82,7 +90,7 @@ func (c *Client) Login() (bool, error) {
 		return false, fmt.Errorf("error unmarshaling response: %w", err)
 	}
 	c.accessToken = sessionResponse.AccessJwt
-	return (err != nil), err
+	return (err == nil), err
 }
 
 // PostResponse represents the response from the server after a successful post.
@@ -104,6 +112,7 @@ type Record struct {
 	CreatedAt string   `json:"createdAt"`
 	Langs     []string `json:"langs,omitempty"`
 	Facets    []Facet  `json:"facets,omitempty"` // Optional field to capture facets
+	Embed     *Embed   `json:"embed,omitempty"`  // Optional field to capture embedded content
 }
 
 type Facet struct {
@@ -123,6 +132,33 @@ type Feature struct {
 	Uri    string `json:"uri,omitempty"`
 }
 
+type Embed struct {
+	Type   string   `json:"$type"`
+	Images []*Image `json:"images,omitempty"`
+}
+
+type Image struct {
+	Alt         string       `json:"alt"`
+	Image       *ImageEmbed  `json:"image"`
+	AspectRatio *AspectRatio `json:"aspectRatio"`
+}
+
+type ImageEmbed struct {
+	Type     string `json:"$type"`
+	Ref      *Ref   `json:"ref"`
+	Mimetype string `json:"mimeType,omitempty"`
+	Size     int    `json:"size,omitempty"`
+}
+
+type Ref struct {
+	Link string `json:"$link,omitempty"`
+}
+
+type AspectRatio struct {
+	Width  int `json:"width"`
+	Height int `json:"height"`
+}
+
 // Post creates a new post with the given content.
 func (c *Client) Post(pb *PostBuilder) (string, error) {
 	url := fmt.Sprintf("%s/xrpc/com.atproto.repo.createRecord", c.server)
@@ -131,6 +167,79 @@ func (c *Client) Post(pb *PostBuilder) (string, error) {
 		return "", fmt.Errorf("error building post request: %w", err)
 	}
 	pr.Repo = c.handle // Set the repo to the user's handle
+
+	// Handle embedded images
+	if len(pb.imageBytes) > 0 {
+		log.Printf("Post(): Adding %d images to post", len(pb.imageBytes))
+		uploadUrl := fmt.Sprintf("%s/xrpc/com.atproto.repo.uploadBlob", c.server)
+
+		// First, upload the images and save their references
+		embeddedImages := make([]*Image, 0, len(pb.imageBytes))
+		for _, origData := range pb.imageBytes {
+			log.Printf("Adding image from bytes of size: %d", len(origData))
+			// If the image file size is too large, scale it until it is under 1MiB
+			data := make([]byte, len(origData))
+			copy(data, origData)
+			scaleFactor := 1.0
+			for len(data) > 1_000_000 {
+				scaleFactor *= 0.9 // Reduce size by 10% each iteration
+				data, err = scaleImage(origData, scaleFactor)
+			}
+			// Figure out the image type and dimensions
+			mimetype := http.DetectContentType(data)
+			log.Printf("Detected mime type: %s", mimetype)
+			config, format, err := image.DecodeConfig(bytes.NewReader(data))
+			if err != nil {
+				log.Printf("Error decoding image config: %v", err)
+				continue
+			}
+			log.Printf("Image config - Width: %d, Height: %d, Format: %s", config.Width, config.Height, format)
+			// Upload the image to the server
+			req, err := http.NewRequest("POST", uploadUrl, bytes.NewBuffer(data))
+			if err != nil {
+				return "", fmt.Errorf("error creating upload request: %w", err)
+			}
+			req.Header.Set("Content-Type", mimetype)
+			req.Header.Set("Authorization", "Bearer "+c.accessToken)
+			resp, err := c.httpClient.Do(req)
+			if err != nil {
+				return "", fmt.Errorf("error uploading image: %w", err)
+			}
+			defer func() {
+				err = errors.Join(err, resp.Body.Close())
+			}()
+			b, err := io.ReadAll(resp.Body)
+			if err != nil {
+				return "", fmt.Errorf("error reading upload response body: %w", err)
+			}
+			log.Printf("response body: %s", b)
+			blob := struct {
+				Blob ImageEmbed `json:"blob"`
+			}{}
+			// var imageEmbed ImageEmbed
+			// imageEmbed.Ref = &Ref{}
+			if err := json.Unmarshal(b, &blob); err != nil {
+				return "", fmt.Errorf("error unmarshaling upload response: %w", err)
+			}
+			log.Printf("Image upload response: %v", blob)
+			image := &Image{
+				Image: &blob.Blob,
+				AspectRatio: &AspectRatio{
+					Width:  config.Width,
+					Height: config.Height,
+				},
+			}
+			embeddedImages = append(embeddedImages, image)
+			log.Printf("Image uploaded with ref: %s", blob.Blob.Ref.Link)
+		}
+
+		// Then, embed the image references in the post record
+		pr.Record.Embed = &Embed{
+			Type:   "app.bsky.embed.images",
+			Images: embeddedImages,
+		}
+	}
+
 	jsonBody, err := json.Marshal(pr)
 	if err != nil {
 		return "", fmt.Errorf("error marshaling request body: %w", err)
@@ -162,6 +271,33 @@ func (c *Client) Post(pb *PostBuilder) (string, error) {
 		return "", fmt.Errorf("post failed with status code: %d (%s) error: %s", resp.StatusCode, resp.Status, postResponse.Error)
 	}
 	return postResponse.Uri, nil
+}
+
+func scaleImage(data []byte, scale float64) ([]byte, error) {
+	src, format, err := image.Decode(bytes.NewReader(data))
+	if err != nil {
+		return nil, fmt.Errorf("error decoding image: %w", err)
+	}
+	dst := image.NewRGBA(image.Rect(0, 0, int(float64(src.Bounds().Dx())*scale), int(float64(src.Bounds().Dy())*scale)))
+	draw.BiLinear.Scale(dst, dst.Bounds(), src, src.Bounds(), draw.Over, nil)
+	buf := new(bytes.Buffer)
+	switch format {
+	case "jpeg":
+		if err := jpeg.Encode(buf, dst, &jpeg.Options{Quality: 85}); err != nil {
+			return nil, fmt.Errorf("error encoding JPEG image: %w", err)
+		}
+		return buf.Bytes(), nil
+	case "gif":
+		if err := gif.Encode(buf, dst, nil); err != nil {
+			return nil, fmt.Errorf("error encoding GIF image: %w", err)
+		}
+		return buf.Bytes(), nil
+	default:
+		if err := png.Encode(buf, dst); err != nil {
+			return nil, fmt.Errorf("error encoding PNG image: %w", err)
+		}
+		return buf.Bytes(), nil
+	}
 }
 
 type PostBuilder struct {
@@ -197,14 +333,16 @@ func (pb *PostBuilder) AddLang(lang string) *PostBuilder {
 }
 
 // AddImageFromPath adds an image to the post from disk.
-func (pb *PostBuilder) AddImageFromPath(path string) *PostBuilder {
+func (pb *PostBuilder) AddImageFromPath(path string, alt string) *PostBuilder {
 	pb.imagePaths = append(pb.imagePaths, path)
+	// TODO: use the alt text
 	return pb
 }
 
 // AddImageFromBytes adds an image to the post from memory.
-func (pb *PostBuilder) AddImageFromBytes(data []byte) *PostBuilder {
+func (pb *PostBuilder) AddImageFromBytes(data []byte, alt string) *PostBuilder {
 	pb.imageBytes = append(pb.imageBytes, data)
+	// TODO: use the alt text
 	return pb
 }
 
@@ -220,15 +358,12 @@ func (pb *PostBuilder) BuildFor(server string) (*PostRequest, error) {
 	if len(pb.imagePaths) > 0 {
 		for _, path := range pb.imagePaths {
 			log.Printf("Adding image from path: %s", path)
-			// TODO: Load image bytes from path
-			// TODO: Calculate width, height, and format of the image
-		}
-	}
-	if len(pb.imageBytes) > 0 {
-		for _, data := range pb.imageBytes {
-			log.Printf("Adding image from bytes of size: %d", len(data))
-			// TODO: Save a reference to the image bytes
-			// TODO: Calculate width, height, and format of the image
+			dat, err := os.ReadFile(path)
+			if err != nil {
+				log.Printf("Error reading image from path %s: %v", path, err)
+				continue
+			}
+			pb.imageBytes = append(pb.imageBytes, dat)
 		}
 	}
 	pb.parseLinks()
