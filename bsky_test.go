@@ -25,6 +25,7 @@ func TestNewClient(t *testing.T) {
 }
 
 func TestLogin(t *testing.T) {
+	t.Skip("Skipping network login test")
 	server := os.Getenv("BSKY_SERVER")
 	handle := os.Getenv("BSKY_HANDLE")
 	password := os.Getenv("BSKY_PASSWORD")
@@ -42,7 +43,7 @@ func TestLogin(t *testing.T) {
 }
 
 func TestPost(t *testing.T) {
-	t.Skip("Skipping test for posting")
+	t.Skip("Skipping network post test")
 	server := os.Getenv("BSKY_SERVER")
 	handle := os.Getenv("BSKY_HANDLE")
 	password := os.Getenv("BSKY_PASSWORD")
