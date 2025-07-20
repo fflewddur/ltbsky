@@ -159,6 +159,12 @@ type AspectRatio struct {
 	Height int `json:"height"`
 }
 
+type LocalImage struct {
+	Path  string
+	Bytes []byte
+	Alt   string
+}
+
 // Post creates a new post with the given content.
 func (c *Client) Post(pb *PostBuilder) (string, error) {
 	url := fmt.Sprintf("%s/xrpc/com.atproto.repo.createRecord", c.server)
@@ -169,21 +175,21 @@ func (c *Client) Post(pb *PostBuilder) (string, error) {
 	pr.Repo = c.handle // Set the repo to the user's handle
 
 	// Handle embedded images
-	if len(pb.imageBytes) > 0 {
-		log.Printf("Post(): Adding %d images to post", len(pb.imageBytes))
+	if len(pb.images) > 0 {
+		log.Printf("Post(): Adding %d images to post", len(pb.images))
 		uploadUrl := fmt.Sprintf("%s/xrpc/com.atproto.repo.uploadBlob", c.server)
 
 		// First, upload the images and save their references
-		embeddedImages := make([]*Image, 0, len(pb.imageBytes))
-		for _, origData := range pb.imageBytes {
-			log.Printf("Adding image from bytes of size: %d", len(origData))
+		embeddedImages := make([]*Image, 0, len(pb.images))
+		for _, img := range pb.images {
+			log.Printf("Adding image from bytes of size: %d", len(img.Bytes))
 			// If the image file size is too large, scale it until it is under 1MiB
-			data := make([]byte, len(origData))
-			copy(data, origData)
+			data := make([]byte, len(img.Bytes))
+			copy(data, img.Bytes)
 			scaleFactor := 1.0
 			for len(data) > 1_000_000 {
 				scaleFactor *= 0.9 // Reduce size by 10% each iteration
-				data, err = scaleImage(origData, scaleFactor)
+				data, err = scaleImage(img.Bytes, scaleFactor)
 			}
 			// Figure out the image type and dimensions
 			mimetype := http.DetectContentType(data)
@@ -224,6 +230,7 @@ func (c *Client) Post(pb *PostBuilder) (string, error) {
 			log.Printf("Image upload response: %v", blob)
 			image := &Image{
 				Image: &blob.Blob,
+				Alt:   img.Alt,
 				AspectRatio: &AspectRatio{
 					Width:  config.Width,
 					Height: config.Height,
@@ -301,20 +308,18 @@ func scaleImage(data []byte, scale float64) ([]byte, error) {
 }
 
 type PostBuilder struct {
-	content    string
-	langs      []string
-	imagePaths []string
-	imageBytes [][]byte
-	facets     []*Facet
+	content string
+	langs   []string
+	images  []*LocalImage
+	facets  []*Facet
 }
 
 // NewPostBuilder creates a new PostBuilder with the initial content.
 func NewPostBuilder(content string) *PostBuilder {
 	return &PostBuilder{
-		content:    content,
-		langs:      []string{},
-		imagePaths: []string{},
-		imageBytes: [][]byte{},
+		content: content,
+		langs:   []string{},
+		images:  make([]*LocalImage, 0),
 	}
 }
 
@@ -334,15 +339,21 @@ func (pb *PostBuilder) AddLang(lang string) *PostBuilder {
 
 // AddImageFromPath adds an image to the post from disk.
 func (pb *PostBuilder) AddImageFromPath(path string, alt string) *PostBuilder {
-	pb.imagePaths = append(pb.imagePaths, path)
-	// TODO: use the alt text
+	localImg := &LocalImage{
+		Path: path,
+		Alt:  alt,
+	}
+	pb.images = append(pb.images, localImg)
 	return pb
 }
 
 // AddImageFromBytes adds an image to the post from memory.
 func (pb *PostBuilder) AddImageFromBytes(data []byte, alt string) *PostBuilder {
-	pb.imageBytes = append(pb.imageBytes, data)
-	// TODO: use the alt text
+	localImg := &LocalImage{
+		Bytes: data,
+		Alt:   alt,
+	}
+	pb.images = append(pb.images, localImg)
 	return pb
 }
 
@@ -355,17 +366,19 @@ func (pb *PostBuilder) BuildFor(server string) (*PostRequest, error) {
 		Langs:     pb.langs,
 	}
 
-	if len(pb.imagePaths) > 0 {
-		for _, path := range pb.imagePaths {
-			log.Printf("Adding image from path: %s", path)
-			dat, err := os.ReadFile(path)
+	// Load images from disk
+	for _, img := range pb.images {
+		if img.Path != "" && len(img.Bytes) == 0 {
+			log.Printf("Adding image from path: %s", img.Path)
+			dat, err := os.ReadFile(img.Path)
 			if err != nil {
-				log.Printf("Error reading image from path %s: %v", path, err)
+				log.Printf("Error reading image from path %s: %v", img.Path, err)
 				continue
 			}
-			pb.imageBytes = append(pb.imageBytes, dat)
+			img.Bytes = dat
 		}
 	}
+
 	pb.parseLinks()
 	pb.parseMentions(server)
 	if len(pb.facets) > 0 {

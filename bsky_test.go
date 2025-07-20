@@ -148,11 +148,8 @@ func TestPostBuilder(t *testing.T) {
 	if pb.content != content {
 		t.Errorf("wanted content '%s', got '%s'", content, pb.content)
 	}
-	if len(pb.imagePaths) != 0 {
-		t.Errorf("wanted no image paths, got %d", len(pb.imagePaths))
-	}
-	if len(pb.imageBytes) != 0 {
-		t.Errorf("wanted no image bytes, got %d", len(pb.imageBytes))
+	if len(pb.images) != 0 {
+		t.Errorf("wanted no images, got %d", len(pb.images))
 	}
 	if len(pb.facets) != 0 {
 		t.Errorf("wanted no facets, got %d", len(pb.facets))
@@ -184,26 +181,29 @@ func TestPostBuilderAddLang(t *testing.T) {
 
 func TestPostBuilderAddImage(t *testing.T) {
 	pb := NewPostBuilder("Test content")
-	if len(pb.imagePaths) != 0 {
-		t.Errorf("wanted no image paths, got %d", len(pb.imagePaths))
+	if len(pb.images) != 0 {
+		t.Errorf("wanted no images, got %d", len(pb.images))
 	}
 	path := "./test-data/bsky-go-1.jpg"
 	alt := "Test image"
 	pb.AddImageFromPath(path, alt)
-	if len(pb.imagePaths) != 1 || pb.imagePaths[0] != path {
-		t.Errorf("wanted image paths ['%s'], got %v", path, pb.imagePaths)
+	if len(pb.images) != 1 || pb.images[0].Path != path {
+		t.Errorf("wanted image paths ['%s'], got %v", path, pb.images[0].Path)
 	}
 	path = "./test-data/bsky-go-1.png"
 	alt = "Another test image"
 	pb.AddImageFromPath(path, alt)
-	if len(pb.imagePaths) != 2 || pb.imagePaths[1] != path {
-		t.Errorf("wanted image paths ['%s'], got %v", path, pb.imagePaths)
+	if len(pb.images) != 2 || pb.images[1].Path != path {
+		t.Errorf("wanted image paths ['%s'], got %v", path, pb.images[1].Path)
 	}
 	_, err := pb.BuildFor("https://bsky.social")
 	if err != nil {
 		t.Fatalf("wanted no error, got %v", err)
 	}
-	if len(pb.imageBytes) != 2 {
-		t.Errorf("wanted len(imageBytes) = 2, got %d", len(pb.imageBytes))
+	if len(pb.images[0].Bytes) == 0 {
+		t.Error("wanted image[0].Bytes to be set, got empty")
+	}
+	if len(pb.images[1].Bytes) == 0 {
+		t.Error("wanted image[0].Bytes to be set, got empty")
 	}
 }
