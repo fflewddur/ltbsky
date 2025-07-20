@@ -141,3 +141,43 @@ func TestPostWithMentionsAndLinks(t *testing.T) {
 		t.Fatalf("wanted no error, got %v", err)
 	}
 }
+
+func TestPostBuilder(t *testing.T) {
+	content := "Test content"
+	pb := NewPostBuilder(content)
+	if pb.content != content {
+		t.Errorf("wanted content '%s', got '%s'", content, pb.content)
+	}
+	if len(pb.imagePaths) != 0 {
+		t.Errorf("wanted no image paths, got %d", len(pb.imagePaths))
+	}
+	if len(pb.imageBytes) != 0 {
+		t.Errorf("wanted no image bytes, got %d", len(pb.imageBytes))
+	}
+	if len(pb.facets) != 0 {
+		t.Errorf("wanted no facets, got %d", len(pb.facets))
+	}
+	pb.AddContent(" more content")
+	if pb.content != "Test content more content" {
+		t.Errorf("wanted content 'Test content more content', got '%s'", pb.content)
+	}
+}
+
+func TestPostBuilderAddLang(t *testing.T) {
+	pb := NewPostBuilder("Test content")
+	if len(pb.langs) != 0 {
+		t.Errorf("wanted no langs, got %d", len(pb.langs))
+	}
+	pb.AddLang("en")
+	if len(pb.langs) != 1 || pb.langs[0] != "en" {
+		t.Errorf("wanted langs ['en'], got %v", pb.langs)
+	}
+	pb.AddLang("")
+	if len(pb.langs) != 1 || pb.langs[0] != "en" {
+		t.Errorf("wanted langs ['en'], got %v", pb.langs)
+	}
+	pb.AddLang("fr")
+	if len(pb.langs) != 2 || pb.langs[1] != "fr" {
+		t.Errorf("wanted langs ['en', 'fr'], got %v", pb.langs)
+	}
+}

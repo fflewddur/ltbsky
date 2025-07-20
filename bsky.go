@@ -99,11 +99,11 @@ type PostRequest struct {
 }
 
 type Record struct {
-	Type      string `json:"$type"`
-	Text      string `json:"text"`
-	CreatedAt string `json:"createdAt"`
-	// TODO: support langs field (https://docs.bsky.app/docs/advanced-guides/posts#setting-the-language)
-	Facets []Facet `json:"facets,omitempty"` // Optional field to capture facets
+	Type      string   `json:"$type"`
+	Text      string   `json:"text"`
+	CreatedAt string   `json:"createdAt"`
+	Langs     []string `json:"langs,omitempty"`
+	Facets    []Facet  `json:"facets,omitempty"` // Optional field to capture facets
 }
 
 type Facet struct {
@@ -166,24 +166,43 @@ func (c *Client) Post(pb *PostBuilder) (string, error) {
 
 type PostBuilder struct {
 	content    string
+	langs      []string
 	imagePaths []string
 	imageBytes [][]byte
 	facets     []*Facet
 }
 
+// NewPostBuilder creates a new PostBuilder with the initial content.
 func NewPostBuilder(content string) *PostBuilder {
 	return &PostBuilder{
 		content:    content,
+		langs:      []string{},
 		imagePaths: []string{},
 		imageBytes: [][]byte{},
 	}
 }
 
+// AddContent appends text content to the post.
+func (pb *PostBuilder) AddContent(content string) *PostBuilder {
+	pb.content += content
+	return pb
+}
+
+// AddLang adds a language code to the post.
+func (pb *PostBuilder) AddLang(lang string) *PostBuilder {
+	if lang != "" {
+		pb.langs = append(pb.langs, lang)
+	}
+	return pb
+}
+
+// AddImageFromPath adds an image to the post from disk.
 func (pb *PostBuilder) AddImageFromPath(path string) *PostBuilder {
 	pb.imagePaths = append(pb.imagePaths, path)
 	return pb
 }
 
+// AddImageFromBytes adds an image to the post from memory.
 func (pb *PostBuilder) AddImageFromBytes(data []byte) *PostBuilder {
 	pb.imageBytes = append(pb.imageBytes, data)
 	return pb
@@ -195,6 +214,7 @@ func (pb *PostBuilder) BuildFor(server string) (*PostRequest, error) {
 		Type:      "app.bsky.feed.post",
 		Text:      pb.content,
 		CreatedAt: createdAt,
+		Langs:     pb.langs,
 	}
 
 	if len(pb.imagePaths) > 0 {
