@@ -26,5 +26,17 @@ func main() {
 	} else {
 		log.Println("Login failed")
 	}
+	postBuilder := bsky.NewPostBuilder("Hello, world!")
+	postBuilder.AddLang("en")
+	pr, err := postBuilder.BuildFor(server)
+	if err != nil {
+		log.Fatalf("Error building post: %v", err)
+	}
+	log.Printf("Post request: %+v", pr)
+	uri, err := client.Post(postBuilder)
+	if err != nil {
+		log.Fatalf("Error posting: %v", err)
+	}
+	log.Printf("Post created with URI: %s", uri)
 	log.Println("bsky test completed")
 }
