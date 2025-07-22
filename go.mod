@@ -1,4 +1,4 @@
-module github.com/fflewddur/bsky
+module github.com/fflewddur/ltbsky
 
 go 1.24.2
 

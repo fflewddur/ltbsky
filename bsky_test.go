@@ -1,4 +1,4 @@
-package bsky
+package ltbsky
 
 import (
 	"os"

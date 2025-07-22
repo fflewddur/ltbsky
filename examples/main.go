@@ -4,7 +4,7 @@ import (
 	"log"
 	"os"
 
-	"github.com/fflewddur/bsky"
+	"github.com/fflewddur/ltbsky"
 )
 
 func main() {
@@ -17,7 +17,7 @@ func BasicExample() {
 	server := os.Getenv("BSKY_SERVER")
 	handle := os.Getenv("BSKY_HANDLE")
 	password := os.Getenv("BSKY_PASSWORD")
-	client, err := bsky.NewClient(server, handle, password)
+	client, err := ltbsky.NewClient(server, handle, password)
 	if err != nil {
 		log.Fatalf("Error creating client: %v", err)
 	}
@@ -31,7 +31,7 @@ func BasicExample() {
 	} else {
 		log.Println("Login failed")
 	}
-	postBuilder := bsky.NewPostBuilder("Hello, world!")
+	postBuilder := ltbsky.NewPostBuilder("Hello, world!")
 	uri, err := client.Post(postBuilder)
 	if err != nil {
 		log.Fatalf("Error posting: %v", err)
@@ -45,7 +45,7 @@ func ImageExample() {
 	server := os.Getenv("BSKY_SERVER")
 	handle := os.Getenv("BSKY_HANDLE")
 	password := os.Getenv("BSKY_PASSWORD")
-	client, err := bsky.NewClient(server, handle, password)
+	client, err := ltbsky.NewClient(server, handle, password)
 	if err != nil {
 		log.Fatalf("Error creating client: %v", err)
 	}
@@ -56,7 +56,7 @@ func ImageExample() {
 	if !loggedIn {
 		log.Fatal("Login failed")
 	}
-	postBuilder := bsky.NewPostBuilder("Hello with image!")
+	postBuilder := ltbsky.NewPostBuilder("Hello with image!")
 	postBuilder.AddLang("en")
 	postBuilder.AddImageFromPath("./test-data/bsky-go-1.png", "Alt text for image")
 
