@@ -3,7 +3,14 @@
   "ignorePaths": [],
   "dictionaryDefinitions": [],
   "dictionaries": [],
-  "words": ["atproto", "bsky", "fflewddur", "ltbsky", "xrpc"],
+  "words": [
+    "atproto",
+    "bsky",
+    "fflewddur",
+    "itodd",
+    "ltbsky",
+    "xrpc"
+  ],
   "ignoreWords": [],
   "import": []
 }
