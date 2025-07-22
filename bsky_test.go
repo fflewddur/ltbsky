@@ -1,6 +1,7 @@
 package ltbsky
 
 import (
+	"net/http"
 	"os"
 	"testing"
 )
@@ -24,7 +25,7 @@ func TestNewClient(t *testing.T) {
 	}
 }
 
-func TestLogin(t *testing.T) {
+func TestAuth(t *testing.T) {
 	t.Skip("Skipping network login test")
 	server := os.Getenv("BSKY_SERVER")
 	handle := os.Getenv("BSKY_HANDLE")
@@ -33,12 +34,9 @@ func TestLogin(t *testing.T) {
 	if err != nil {
 		t.Fatalf("wanted no error, got %v", err)
 	}
-	loggedIn, err := client.Login()
+	err = client.auth()
 	if err != nil {
 		t.Fatalf("wanted no error, got %v", err)
-	}
-	if !loggedIn {
-		t.Error("wanted logged in to be true, got false")
 	}
 }
 
@@ -50,13 +48,6 @@ func TestPost(t *testing.T) {
 	client, err := NewClient(server, handle, password)
 	if err != nil {
 		t.Fatalf("wanted no error, got %v", err)
-	}
-	loggedIn, err := client.Login()
-	if err != nil {
-		t.Fatalf("wanted no error, got %v", err)
-	}
-	if !loggedIn {
-		t.Error("wanted logged in to be true, got false")
 	}
 
 	content := "Hello, world!"
@@ -76,13 +67,6 @@ func TestPostWithLinks(t *testing.T) {
 	if err != nil {
 		t.Fatalf("wanted no error, got %v", err)
 	}
-	loggedIn, err := client.Login()
-	if err != nil {
-		t.Fatalf("wanted no error, got %v", err)
-	}
-	if !loggedIn {
-		t.Error("wanted logged in to be true, got false")
-	}
 
 	content := "Link test: https://go.dev https://pkg.go.dev"
 	pb := NewPostBuilder(content)
@@ -101,13 +85,6 @@ func TestPostWithMentions(t *testing.T) {
 	if err != nil {
 		t.Fatalf("wanted no error, got %v", err)
 	}
-	loggedIn, err := client.Login()
-	if err != nil {
-		t.Fatalf("wanted no error, got %v", err)
-	}
-	if !loggedIn {
-		t.Error("wanted logged in to be true, got false")
-	}
 
 	content := "Mention test: @itodd.dev @golang.org"
 	pb := NewPostBuilder(content)
@@ -125,13 +102,6 @@ func TestPostWithMentionsAndLinks(t *testing.T) {
 	client, err := NewClient(server, handle, password)
 	if err != nil {
 		t.Fatalf("wanted no error, got %v", err)
-	}
-	loggedIn, err := client.Login()
-	if err != nil {
-		t.Fatalf("wanted no error, got %v", err)
-	}
-	if !loggedIn {
-		t.Error("wanted logged in to be true, got false")
 	}
 
 	content := "Mention and link test: @itodd.dev https://go.dev @golang.org https://pkg.go.dev"
@@ -196,7 +166,7 @@ func TestPostBuilderAddImage(t *testing.T) {
 	if len(pb.images) != 2 || pb.images[1].Path != path {
 		t.Errorf("wanted image paths ['%s'], got %v", path, pb.images[1].Path)
 	}
-	_, err := pb.BuildFor("https://bsky.social")
+	_, err := pb.BuildFor("https://bsky.social", &http.Client{})
 	if err != nil {
 		t.Fatalf("wanted no error, got %v", err)
 	}

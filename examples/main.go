@@ -22,15 +22,6 @@ func BasicExample() {
 		log.Fatalf("Error creating client: %v", err)
 	}
 	log.Printf("Client created: %+v", client)
-	loggedIn, err := client.Login()
-	if err != nil {
-		log.Fatalf("Error logging in: %v", err)
-	}
-	if loggedIn {
-		log.Println("Successfully logged in")
-	} else {
-		log.Println("Login failed")
-	}
 	postBuilder := ltbsky.NewPostBuilder("Hello, world!")
 	uri, err := client.Post(postBuilder)
 	if err != nil {
@@ -48,13 +39,6 @@ func ImageExample() {
 	client, err := ltbsky.NewClient(server, handle, password)
 	if err != nil {
 		log.Fatalf("Error creating client: %v", err)
-	}
-	loggedIn, err := client.Login()
-	if err != nil {
-		log.Fatalf("Error logging in: %v", err)
-	}
-	if !loggedIn {
-		log.Fatal("Login failed")
 	}
 	postBuilder := ltbsky.NewPostBuilder("Hello with image!")
 	postBuilder.AddLang("en")

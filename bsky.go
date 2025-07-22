@@ -54,45 +54,6 @@ type SessionResponse struct {
 	RefreshJwt string `json:"refreshJwt"`
 }
 
-// Login logs in to the server using the provided handle and password.
-func (c *Client) Login() (bool, error) {
-	url := fmt.Sprintf("%s/xrpc/com.atproto.server.createSession", c.server)
-	requestBody := map[string]string{
-		"identifier": c.handle,
-		"password":   c.password,
-	}
-	jsonBody, err := json.Marshal(requestBody)
-	if err != nil {
-		return false, fmt.Errorf("error marshaling request body: %w", err)
-	}
-	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
-	if err != nil {
-		return false, fmt.Errorf("error creating request: %w", err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-	resp, err := c.httpClient.Do(req)
-	if err != nil {
-		return false, fmt.Errorf("error making request: %w", err)
-	}
-	defer func() {
-		err = errors.Join(err, resp.Body.Close())
-	}()
-
-	if resp.StatusCode != http.StatusOK {
-		return false, fmt.Errorf("login failed with status code: %d", resp.StatusCode)
-	}
-	b, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return false, fmt.Errorf("error reading response body: %w", err)
-	}
-	var sessionResponse SessionResponse
-	if err := json.Unmarshal(b, &sessionResponse); err != nil {
-		return false, fmt.Errorf("error unmarshaling response: %w", err)
-	}
-	c.accessToken = sessionResponse.AccessJwt
-	return (err == nil), err
-}
-
 // PostResponse represents the response from the server after a successful post.
 type PostResponse struct {
 	Uri   string `json:"uri"`
@@ -111,8 +72,8 @@ type Record struct {
 	Text      string   `json:"text"`
 	CreatedAt string   `json:"createdAt"`
 	Langs     []string `json:"langs,omitempty"`
-	Facets    []Facet  `json:"facets,omitempty"` // Optional field to capture facets
-	Embed     *Embed   `json:"embed,omitempty"`  // Optional field to capture embedded content
+	Facets    []Facet  `json:"facets,omitempty"`
+	Embed     *Embed   `json:"embed,omitempty"`
 }
 
 type Facet struct {
@@ -165,93 +126,68 @@ type LocalImage struct {
 	Alt   string
 }
 
+// auth logs in to the server using the provided handle and password.
+func (c *Client) auth() error {
+	url := fmt.Sprintf("%s/xrpc/com.atproto.server.createSession", c.server)
+	requestBody := map[string]string{
+		"identifier": c.handle,
+		"password":   c.password,
+	}
+	jsonBody, err := json.Marshal(requestBody)
+	if err != nil {
+		return fmt.Errorf("error marshaling request body: %w", err)
+	}
+	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
+	if err != nil {
+		return fmt.Errorf("error creating request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/json")
+	resp, err := c.httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("error making request: %w", err)
+	}
+	defer func() {
+		err = errors.Join(err, resp.Body.Close())
+	}()
+
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("login failed with status code: %d", resp.StatusCode)
+	}
+	b, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("error reading response body: %w", err)
+	}
+	var sessionResponse SessionResponse
+	if err := json.Unmarshal(b, &sessionResponse); err != nil {
+		return fmt.Errorf("error unmarshaling response: %w", err)
+	}
+	c.accessToken = sessionResponse.AccessJwt
+	return err
+}
+
 // Post creates a new post with the given content.
 func (c *Client) Post(pb *PostBuilder) (string, error) {
+	err := c.auth()
+	if err != nil {
+		return "", fmt.Errorf("error authenticating: %w", err)
+	}
+
 	url := fmt.Sprintf("%s/xrpc/com.atproto.repo.createRecord", c.server)
-	pr, err := pb.BuildFor(c.server)
+	pr, err := pb.BuildFor(c.server, c.httpClient)
 	if err != nil {
 		return "", fmt.Errorf("error building post request: %w", err)
 	}
 	pr.Repo = c.handle // Set the repo to the user's handle
 
-	// Handle embedded images
-	if len(pb.images) > 0 {
-		log.Printf("Post(): Adding %d images to post", len(pb.images))
-		uploadUrl := fmt.Sprintf("%s/xrpc/com.atproto.repo.uploadBlob", c.server)
-
-		// First, upload the images and save their references
-		embeddedImages := make([]*Image, 0, len(pb.images))
-		for _, img := range pb.images {
-			log.Printf("Adding image from bytes of size: %d", len(img.Bytes))
-			// If the image file size is too large, scale it until it is under 1MiB
-			data := make([]byte, len(img.Bytes))
-			copy(data, img.Bytes)
-			scaleFactor := 1.0
-			for len(data) > 1_000_000 {
-				scaleFactor *= 0.9 // Reduce size by 10% each iteration
-				data, err = scaleImage(img.Bytes, scaleFactor)
-			}
-			// Figure out the image type and dimensions
-			mimetype := http.DetectContentType(data)
-			log.Printf("Detected mime type: %s", mimetype)
-			config, format, err := image.DecodeConfig(bytes.NewReader(data))
-			if err != nil {
-				log.Printf("Error decoding image config: %v", err)
-				continue
-			}
-			log.Printf("Image config - Width: %d, Height: %d, Format: %s", config.Width, config.Height, format)
-			// Upload the image to the server
-			req, err := http.NewRequest("POST", uploadUrl, bytes.NewBuffer(data))
-			if err != nil {
-				return "", fmt.Errorf("error creating upload request: %w", err)
-			}
-			req.Header.Set("Content-Type", mimetype)
-			req.Header.Set("Authorization", "Bearer "+c.accessToken)
-			resp, err := c.httpClient.Do(req)
-			if err != nil {
-				return "", fmt.Errorf("error uploading image: %w", err)
-			}
-			defer func() {
-				err = errors.Join(err, resp.Body.Close())
-			}()
-			b, err := io.ReadAll(resp.Body)
-			if err != nil {
-				return "", fmt.Errorf("error reading upload response body: %w", err)
-			}
-			log.Printf("response body: %s", b)
-			blob := struct {
-				Blob ImageEmbed `json:"blob"`
-			}{}
-			// var imageEmbed ImageEmbed
-			// imageEmbed.Ref = &Ref{}
-			if err := json.Unmarshal(b, &blob); err != nil {
-				return "", fmt.Errorf("error unmarshaling upload response: %w", err)
-			}
-			log.Printf("Image upload response: %v", blob)
-			image := &Image{
-				Image: &blob.Blob,
-				Alt:   img.Alt,
-				AspectRatio: &AspectRatio{
-					Width:  config.Width,
-					Height: config.Height,
-				},
-			}
-			embeddedImages = append(embeddedImages, image)
-			log.Printf("Image uploaded with ref: %s", blob.Blob.Ref.Link)
-		}
-
-		// Then, embed the image references in the post record
-		pr.Record.Embed = &Embed{
-			Type:   "app.bsky.embed.images",
-			Images: embeddedImages,
-		}
+	err = c.embedImagesInPost(pb, pr)
+	if err != nil {
+		return "", fmt.Errorf("error embedding images in post: %w", err)
 	}
 
 	jsonBody, err := json.Marshal(pr)
 	if err != nil {
 		return "", fmt.Errorf("error marshaling request body: %w", err)
 	}
-	log.Printf("Posting to %s with content: %s", url, jsonBody)
 	req, err := http.NewRequest("POST", url, bytes.NewBuffer(jsonBody))
 	if err != nil {
 		return "", fmt.Errorf("error creating request: %w", err)
@@ -278,6 +214,82 @@ func (c *Client) Post(pb *PostBuilder) (string, error) {
 		return "", fmt.Errorf("post failed with status code: %d (%s) error: %s", resp.StatusCode, resp.Status, postResponse.Error)
 	}
 	return postResponse.Uri, nil
+}
+
+func (c *Client) embedImagesInPost(pb *PostBuilder, pr *PostRequest) error {
+	if len(pb.images) == 0 {
+		return nil
+	}
+	uploadUrl := fmt.Sprintf("%s/xrpc/com.atproto.repo.uploadBlob", c.server)
+
+	// First, upload the images and save their references
+	embeddedImages := make([]*Image, 0, len(pb.images))
+	for _, img := range pb.images {
+		// If the image file size is too large, scale it until it is under 1MiB
+		data := make([]byte, len(img.Bytes))
+		copy(data, img.Bytes)
+		scaleFactor := 1.0
+		var err error
+		for len(data) > 1_000_000 {
+			scaleFactor *= 0.9 // Reduce size by 10% each iteration
+			data, err = scaleImage(img.Bytes, scaleFactor)
+			if err != nil {
+				return fmt.Errorf("error scaling image: %w", err)
+			}
+		}
+
+		// Figure out the image type and dimensions
+		mimetype := http.DetectContentType(data)
+		config, _, err := image.DecodeConfig(bytes.NewReader(data))
+		if err != nil {
+			log.Printf("Error decoding image config: %v", err)
+			continue
+		}
+
+		// Upload the image to the server
+		req, err := http.NewRequest("POST", uploadUrl, bytes.NewBuffer(data))
+		if err != nil {
+			return fmt.Errorf("error creating upload request: %w", err)
+		}
+		req.Header.Set("Content-Type", mimetype)
+		req.Header.Set("Authorization", "Bearer "+c.accessToken)
+		resp, err := c.httpClient.Do(req)
+		if err != nil {
+			return fmt.Errorf("error uploading image: %w", err)
+		}
+		defer func() {
+			err = errors.Join(err, resp.Body.Close())
+		}()
+		b, err := io.ReadAll(resp.Body)
+		if err != nil {
+			return fmt.Errorf("error reading upload response body: %w", err)
+		}
+		blob := struct {
+			Blob ImageEmbed `json:"blob"`
+		}{}
+		if err := json.Unmarshal(b, &blob); err != nil {
+			return fmt.Errorf("error unmarshaling upload response: %w", err)
+		}
+
+		// Create the JSON object for this image
+		image := &Image{
+			Image: &blob.Blob,
+			Alt:   img.Alt,
+			AspectRatio: &AspectRatio{
+				Width:  config.Width,
+				Height: config.Height,
+			},
+		}
+		embeddedImages = append(embeddedImages, image)
+	}
+
+	// Then, embed the image references in the post record
+	pr.Record.Embed = &Embed{
+		Type:   "app.bsky.embed.images",
+		Images: embeddedImages,
+	}
+
+	return nil
 }
 
 func scaleImage(data []byte, scale float64) ([]byte, error) {
@@ -357,7 +369,7 @@ func (pb *PostBuilder) AddImageFromBytes(data []byte, alt string) *PostBuilder {
 	return pb
 }
 
-func (pb *PostBuilder) BuildFor(server string) (*PostRequest, error) {
+func (pb *PostBuilder) BuildFor(server string, c *http.Client) (*PostRequest, error) {
 	createdAt := time.Now().UTC().Format(time.RFC3339)
 	record := &Record{
 		Type:      "app.bsky.feed.post",
@@ -380,7 +392,7 @@ func (pb *PostBuilder) BuildFor(server string) (*PostRequest, error) {
 	}
 
 	pb.parseLinks()
-	pb.parseMentions(server)
+	pb.parseMentions(server, c)
 	if len(pb.facets) > 0 {
 		record.Facets = make([]Facet, len(pb.facets))
 		for i, f := range pb.facets {
@@ -420,7 +432,7 @@ func (pb *PostBuilder) parseLinks() {
 	}
 }
 
-func (pb *PostBuilder) parseMentions(server string) {
+func (pb *PostBuilder) parseMentions(server string, c *http.Client) {
 	// regex based on: https://atproto.com/specs/handle#handle-identifier-syntax
 	handle_regex := `[$|\W](?P<handle>@([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)`
 	r, err := regexp.Compile(handle_regex)
@@ -429,50 +441,49 @@ func (pb *PostBuilder) parseMentions(server string) {
 		return
 	}
 	matches := r.FindAllSubmatchIndex([]byte(pb.content), -1)
-	if matches != nil {
-		c := &http.Client{}
-		for _, match := range matches {
-			start := match[2] // start position of the 'handle' group
-			end := match[3]
-			handle := pb.content[start+1 : end] // +1 to skip the '@' character
-			url := fmt.Sprintf("%s/xrpc/com.atproto.identity.resolveHandle?handle=%s", server, handle)
-			req, err := http.NewRequest("GET", url, nil)
-			if err != nil {
-				log.Printf("Error creating request for handle %s: %v", handle, err)
-				continue
-			}
-			resp, err := c.Do(req)
-			if err != nil {
-				log.Printf("Error making request for handle %s: %v", handle, err)
-				continue
-			}
-			defer func() {
-				err = errors.Join(err, resp.Body.Close())
-			}()
 
-			if resp.StatusCode != http.StatusOK {
-				log.Printf("Failed to resolve handle %s with status code: %d", handle, resp.StatusCode)
-				continue
-			}
-			b, err := io.ReadAll(resp.Body)
-			if err != nil {
-				log.Printf("Error reading response body for handle %s: %v", handle, err)
-				continue
-			}
-			var resolveResponse struct {
-				Did string `json:"did"`
-			}
-			if err := json.Unmarshal(b, &resolveResponse); err != nil {
-				log.Printf("Error unmarshaling response for handle %s: %v", handle, err)
-				continue
-			}
-			f := &Facet{
-				Index: Index{ByteStart: start, ByteEnd: end},
-				Features: []Feature{
-					{Type: "app.bsky.richtext.facet#mention", Did: resolveResponse.Did},
-				},
-			}
-			pb.facets = append(pb.facets, f)
+	for _, match := range matches {
+		start := match[2] // start position of the 'handle' group
+		end := match[3]
+		handle := pb.content[start+1 : end] // +1 to skip the '@' character
+		url := fmt.Sprintf("%s/xrpc/com.atproto.identity.resolveHandle?handle=%s", server, handle)
+		req, err := http.NewRequest("GET", url, nil)
+		if err != nil {
+			log.Printf("Error creating request for handle %s: %v", handle, err)
+			continue
 		}
+		resp, err := c.Do(req)
+		if err != nil {
+			log.Printf("Error making request for handle %s: %v", handle, err)
+			continue
+		}
+		defer func() {
+			err = errors.Join(err, resp.Body.Close())
+		}()
+
+		if resp.StatusCode != http.StatusOK {
+			log.Printf("Failed to resolve handle %s with status code: %d", handle, resp.StatusCode)
+			continue
+		}
+		b, err := io.ReadAll(resp.Body)
+		if err != nil {
+			log.Printf("Error reading response body for handle %s: %v", handle, err)
+			continue
+		}
+		var resolveResponse struct {
+			Did string `json:"did"`
+		}
+		if err := json.Unmarshal(b, &resolveResponse); err != nil {
+			log.Printf("Error unmarshaling response for handle %s: %v", handle, err)
+			continue
+		}
+		f := &Facet{
+			Index: Index{ByteStart: start, ByteEnd: end},
+			Features: []Feature{
+				{Type: "app.bsky.richtext.facet#mention", Did: resolveResponse.Did},
+			},
+		}
+		pb.facets = append(pb.facets, f)
+
 	}
 }
