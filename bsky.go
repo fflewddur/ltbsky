@@ -381,7 +381,6 @@ func (pb *PostBuilder) BuildFor(server string, c *http.Client) (*PostRequest, er
 	// Load images from disk
 	for _, img := range pb.images {
 		if img.Path != "" && len(img.Bytes) == 0 {
-			log.Printf("Adding image from path: %s", img.Path)
 			dat, err := os.ReadFile(img.Path)
 			if err != nil {
 				log.Printf("Error reading image from path %s: %v", img.Path, err)
