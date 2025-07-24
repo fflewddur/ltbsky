@@ -18,7 +18,7 @@ First we create a client using `ltbsky.NewClient(server, handle, password)`. The
 
 Then we create a post using `NewPostBuilder(content)`, where `content` is the text of the post. Web links and Bluesky mentions will automatically appear as links in the post (e.g., "Visit https://go.dev to learn more" will show "go.dev" as a link when viewed on Bluesky).
 
-Finally, we call client.Post(postBuilder) to publish the post. The `Post` method will automatically authenticate with your Bluesky server using your provided credentials.
+Finally, we call `client.Post(postBuilder)` to publish the post. The `Post` method will automatically authenticate with your Bluesky server using your provided credentials.
 
 ```go
 server := os.Getenv("BSKY_SERVER") // e.g., "https://bsky.social"
@@ -42,17 +42,12 @@ log.Printf("Post created with URI: %s", uri)
 To embed an image in a post, we add a call to `PostBuilder.AddImageFromPath(path, altText)` or `PostBuilder.AddImageFromBytes(bytes, altText)`:
 
 ```go
-server := os.Getenv("BSKY_SERVER") // e.g., "https://bsky.social"
-handle := os.Getenv("BSKY_HANDLE") // username, e.g. "golang.org"
-password := os.Getenv("BSKY_PASSWORD") // from Bluesky -> Settings -> Privacy and security -> App passwords
+// [continued from above]
 
-client, err := ltbsky.NewClient(server, handle, password)
-if err != nil {
-    log.Fatalf("Error creating client: %v", err)
-}
-postBuilder := ltbsky.NewPostBuilder("There's an image in this post. Isn't that right, @golang.org?")
+postBuilder = ltbsky.NewPostBuilder("There's an image in this post. Isn't that right, @golang.org?")
 postBuilder.AddImageFromPath("./test-data/bsky-go-1.png", "A screenshot of the Go installation process")
-uri, err := client.Post(postBuilder)
+postBuilder.AddImageFromPath("./test-data/bsky-go-1.jpg", "A second screenshot of the Go installation process")
+uri, err = client.Post(postBuilder)
 if err != nil {
     log.Fatalf("Error posting: %v", err)
 }
@@ -64,18 +59,12 @@ log.Printf("Post created with URI: %s", uri)
 To specify each language used in a post, we add a call to `PostBuilder.AddLang(langCode)`:
 
 ```go
-server := os.Getenv("BSKY_SERVER") // e.g., "https://bsky.social"
-handle := os.Getenv("BSKY_HANDLE") // username, e.g. "golang.org"
-password := os.Getenv("BSKY_PASSWORD") // from Bluesky -> Settings -> Privacy and security -> App passwords
+// [continued from above]
 
-client, err := ltbsky.NewClient(server, handle, password)
-if err != nil {
-    log.Fatalf("Error creating client: %v", err)
-}
-postBuilder := ltbsky.NewPostBuilder("Hello, world! Hola, mundo!")
+postBuilder = ltbsky.NewPostBuilder("Hello, world! Hola, mundo!")
 postBuilder.AddLang("en") // Add English language
 postBuilder.AddLang("es") // Add Spanish language
-uri, err := client.Post(postBuilder)
+uri, err = client.Post(postBuilder)
 if err != nil {
     log.Fatalf("Error posting: %v", err)
 }
