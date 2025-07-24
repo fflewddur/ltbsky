@@ -6,16 +6,15 @@ import (
 	"errors"
 	"fmt"
 	"image"
+	"image/gif"
+	"image/jpeg"
+	"image/png"
 	"io"
 	"log"
 	"net/http"
 	"os"
 	"regexp"
 	"time"
-
-	"image/gif"
-	"image/jpeg"
-	"image/png"
 
 	"golang.org/x/image/draw"
 )
