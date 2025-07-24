@@ -13,7 +13,7 @@ ltbsky is a lightweight library for posting to Bluesky.
 
 ## Create a post
 
-First we create a client using `ltbsky.NewClient(server, handle, password)`. The server is the Bluesky server URL (e.g., "https://bsky.social"), the handle is your username (e.g., "golang.org"), and the password is an app password from your Bluesky account settings.
+First we create a client using `ltbsky.NewClient(server, handle, password)`. The `server` is your Bluesky host URL (e.g., "https://bsky.social"), `handle` is your username (e.g., "golang.org"), and `password` is an app password from your Bluesky account settings.
 
 Then we create a post using `NewPostBuilder(content)`, where `content` is the text of the post. Web links and Bluesky mentions will automatically appear as links in the post (e.g., "Visit https://go.dev to learn more" will show "go.dev" as a link when viewed on Bluesky).
 
