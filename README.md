@@ -8,6 +8,7 @@ ltbsky is a lightweight library for posting to Bluesky.
 - Embed images in a post
 - Specify the language(s) of a post
 - Automatically parse web links and Bluesky mentions from a post
+- Automatically reduce image size to fit within Bluesky's 1MB limit
 
 # Examples
 
@@ -49,7 +50,7 @@ client, err := ltbsky.NewClient(server, handle, password)
 if err != nil {
     log.Fatalf("Error creating client: %v", err)
 }
-postBuilder := ltbsky.NewPostBuilder("Hello, world! Hola, mundo! There's an image in this post. Isn't that right, @golang.org?")
+postBuilder := ltbsky.NewPostBuilder("There's an image in this post. Isn't that right, @golang.org?")
 postBuilder.AddImageFromPath("./test-data/bsky-go-1.png", "A screenshot of the Go installation process")
 uri, err := client.Post(postBuilder)
 if err != nil {
