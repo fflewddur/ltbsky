@@ -2,14 +2,14 @@ package ltbsky
 
 import (
 	"net/http"
-	"os"
+	"net/http/httptest"
 	"testing"
 )
 
 func TestNewClient(t *testing.T) {
-	server := os.Getenv("BSKY_SERVER")
-	handle := os.Getenv("BSKY_HANDLE")
-	password := os.Getenv("BSKY_PASSWORD")
+	server := "https://bsky.social"
+	handle := "test.handle"
+	password := "test.password"
 	client, err := NewClient(server, handle, password)
 	if err != nil {
 		t.Fatalf("wanted no error, got %v", err)
@@ -26,11 +26,10 @@ func TestNewClient(t *testing.T) {
 }
 
 func TestAuth(t *testing.T) {
-	t.Skip("Skipping network login test")
-	server := os.Getenv("BSKY_SERVER")
-	handle := os.Getenv("BSKY_HANDLE")
-	password := os.Getenv("BSKY_PASSWORD")
-	client, err := NewClient(server, handle, password)
+	server := newMockServer()
+	defer server.Close()
+
+	client, err := NewClient(server.URL, "test.handle", "test.password")
 	if err != nil {
 		t.Fatalf("wanted no error, got %v", err)
 	}
@@ -41,11 +40,10 @@ func TestAuth(t *testing.T) {
 }
 
 func TestPost(t *testing.T) {
-	t.Skip("Skipping network post test")
-	server := os.Getenv("BSKY_SERVER")
-	handle := os.Getenv("BSKY_HANDLE")
-	password := os.Getenv("BSKY_PASSWORD")
-	client, err := NewClient(server, handle, password)
+	server := newMockServer()
+	defer server.Close()
+
+	client, err := NewClient(server.URL, "test.handle", "test.password")
 	if err != nil {
 		t.Fatalf("wanted no error, got %v", err)
 	}
@@ -59,11 +57,10 @@ func TestPost(t *testing.T) {
 }
 
 func TestPostWithLinks(t *testing.T) {
-	t.Skip("Skipping test for posting links")
-	server := os.Getenv("BSKY_SERVER")
-	handle := os.Getenv("BSKY_HANDLE")
-	password := os.Getenv("BSKY_PASSWORD")
-	client, err := NewClient(server, handle, password)
+	server := newMockServer()
+	defer server.Close()
+
+	client, err := NewClient(server.URL, "test.handle", "test.password")
 	if err != nil {
 		t.Fatalf("wanted no error, got %v", err)
 	}
@@ -77,11 +74,10 @@ func TestPostWithLinks(t *testing.T) {
 }
 
 func TestPostWithMentions(t *testing.T) {
-	t.Skip("Skipping test for posting mentions")
-	server := os.Getenv("BSKY_SERVER")
-	handle := os.Getenv("BSKY_HANDLE")
-	password := os.Getenv("BSKY_PASSWORD")
-	client, err := NewClient(server, handle, password)
+	server := newMockServer()
+	defer server.Close()
+
+	client, err := NewClient(server.URL, "test.handle", "test.password")
 	if err != nil {
 		t.Fatalf("wanted no error, got %v", err)
 	}
@@ -95,11 +91,10 @@ func TestPostWithMentions(t *testing.T) {
 }
 
 func TestPostWithMentionsAndLinks(t *testing.T) {
-	t.Skip("Skipping test for posting mentions and links")
-	server := os.Getenv("BSKY_SERVER")
-	handle := os.Getenv("BSKY_HANDLE")
-	password := os.Getenv("BSKY_PASSWORD")
-	client, err := NewClient(server, handle, password)
+	server := newMockServer()
+	defer server.Close()
+
+	client, err := NewClient(server.URL, "test.handle", "test.password")
 	if err != nil {
 		t.Fatalf("wanted no error, got %v", err)
 	}
@@ -176,4 +171,89 @@ func TestPostBuilderAddImage(t *testing.T) {
 	if len(pb.images[1].Bytes) == 0 {
 		t.Error("wanted image[0].Bytes to be set, got empty")
 	}
+}
+
+func TestSimulatedPost(t *testing.T) {
+	server := newMockServer()
+	defer server.Close()
+
+	client, err := NewClient(server.URL, "test.handle", "test.password")
+	if err != nil {
+		t.Fatalf("wanted no error, got %v", err)
+	}
+
+	content := "Hello, world!"
+	pb := NewPostBuilder(content)
+	_, err = client.Post(pb)
+	if err != nil {
+		t.Fatalf("wanted no error, got %v", err)
+	}
+}
+
+func TestSimulatedPostWithImage(t *testing.T) {
+	server := newMockServer()
+	defer server.Close()
+
+	client, err := NewClient(server.URL, "test.handle", "test.password")
+	if err != nil {
+		t.Fatalf("wanted no error, got %v", err)
+	}
+
+	content := "Hello, world!"
+	pb := NewPostBuilder(content)
+	pb.AddImageFromPath("./test-data/bsky-go-1.png", "test image")
+	_, err = client.Post(pb)
+	if err != nil {
+		t.Fatalf("wanted no error, got %v", err)
+	}
+}
+
+func TestSimulatedPostWithMentionsAndLinks(t *testing.T) {
+	server := newMockServer()
+	defer server.Close()
+
+	client, err := NewClient(server.URL, "test.handle", "test.password")
+	if err != nil {
+		t.Fatalf("wanted no error, got %v", err)
+	}
+
+	content := "Mention and link test: @itodd.dev https://go.dev @golang.org https://pkg.go.dev"
+	pb := NewPostBuilder(content)
+	_, err = client.Post(pb)
+	if err != nil {
+		t.Fatalf("wanted no error, got %v", err)
+	}
+}
+
+func newMockServer() *httptest.Server {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch r.URL.Path {
+		case "/xrpc/com.atproto.server.createSession":
+			w.WriteHeader(http.StatusOK)
+			_, err := w.Write([]byte(`{"accessJwt": "test.token"}`))
+			if err != nil {
+				return
+			}
+		case "/xrpc/com.atproto.repo.createRecord":
+			w.WriteHeader(http.StatusOK)
+			_, err := w.Write([]byte(`{"uri": "test.uri", "cid": "test.cid"}`))
+			if err != nil {
+				return
+			}
+		case "/xrpc/com.atproto.repo.uploadBlob":
+			w.WriteHeader(http.StatusOK)
+			_, err := w.Write([]byte(`{"blob": {"$type": "blob", "ref": {"$link": "test.link"}, "mimeType": "image/png", "size": 1234}}`))
+			if err != nil {
+				return
+			}
+		case "/xrpc/com.atproto.identity.resolveHandle":
+			w.WriteHeader(http.StatusOK)
+			_, err := w.Write([]byte(`{"did": "test.did"}`))
+			if err != nil {
+				return
+			}
+		default:
+			w.WriteHeader(http.StatusNotFound)
+		}
+	}))
 }

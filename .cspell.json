@@ -6,9 +6,12 @@
   "words": [
     "atproto",
     "bsky",
+    "Fatalf",
     "fflewddur",
+    "Getenv",
     "itodd",
     "ltbsky",
+    "mundo",
     "xrpc"
   ],
   "ignoreWords": [],
