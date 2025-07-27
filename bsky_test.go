@@ -1,6 +1,7 @@
 package ltbsky
 
 import (
+	"bytes"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -222,6 +223,35 @@ func TestSimulatedPostWithMentionsAndLinks(t *testing.T) {
 	_, err = client.Post(pb)
 	if err != nil {
 		t.Fatalf("wanted no error, got %v", err)
+	}
+}
+
+func TestAddImageFromBytes(t *testing.T) {
+	pb := NewPostBuilder("Test content")
+	if len(pb.images) != 0 {
+		t.Errorf("wanted no images, got %d", len(pb.images))
+	}
+	// Add an image from bytes
+	pb.AddImageFromBytes([]byte("test image data"), "Test image")
+	if len(pb.images) != 1 {
+		t.Errorf("wanted one image, got %d", len(pb.images))
+	}
+	if !bytes.Equal(pb.images[0].Bytes, []byte("test image data")) {
+		t.Errorf("wanted image bytes 'test image data', got '%s'", pb.images[0].Bytes)
+	}
+	if pb.images[0].Alt != "Test image" {
+		t.Errorf("wanted image alt 'Test image', got '%s'", pb.images[0].Alt)
+	}
+	// Add a second image
+	pb.AddImageFromBytes([]byte("more test image data"), "Test image two")
+	if len(pb.images) != 2 {
+		t.Errorf("wanted two images, got %d", len(pb.images))
+	}
+	if !bytes.Equal(pb.images[1].Bytes, []byte("more test image data")) {
+		t.Errorf("wanted second image bytes 'more test image data', got '%s'", pb.images[1].Bytes)
+	}
+	if pb.images[1].Alt != "Test image two" {
+		t.Errorf("wanted second image alt 'Test image two', got '%s'", pb.images[1].Alt)
 	}
 }
 
