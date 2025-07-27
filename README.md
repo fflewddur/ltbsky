@@ -2,7 +2,7 @@
 
 ltbsky is a lightweight library for posting to Bluesky.
 
-# Features
+## Features
 
 - Create a post
 - Embed images in a post
@@ -10,19 +10,19 @@ ltbsky is a lightweight library for posting to Bluesky.
 - Automatically parse web links and Bluesky mentions from a post
 - Automatically reduce image size to fit within Bluesky's 1MB limit
 
-# Examples
+## Examples
 
-## Create a post
+### Create a post
 
 First, we create a client using `ltbsky.NewClient(server, handle, password)`.
-The `server` is your Bluesky host URL (e.g., "https://bsky.social"), `handle`
+The `server` is your Bluesky host URL (e.g., `"https://bsky.social"`), `handle`
 is your username (e.g., "golang.org"), and `password` is an app password from
 your Bluesky account settings. You can reuse the same client for multiple
 posts.
 
 Then we create a post using `NewPostBuilder(content)`, where `content` is the
 text of the post. Web links and Bluesky mentions will automatically appear as
-links in the post (e.g., "Visit https://go.dev to learn more" will show
+links in the post (e.g., `"Visit https://go.dev to learn more"` will show
 "go.dev" as a link when viewed on Bluesky).
 
 Finally, we call `client.Post(postBuilder)` to publish the post. The `Post`
@@ -46,7 +46,7 @@ if err != nil {
 log.Printf("Post created with URI: %s", uri)
 ```
 
-## Create a post with an image
+### Create a post with an image
 
 To embed an image in a post, we add a call to
 `PostBuilder.AddImageFromPath(path, altText)` or
@@ -65,7 +65,7 @@ if err != nil {
 log.Printf("Post created with URI: %s", uri)
 ```
 
-## Specify a post's languages
+### Specify a post's languages
 
 To specify each language used in a post, we add a call to
 `PostBuilder.AddLang(langCode)`:
