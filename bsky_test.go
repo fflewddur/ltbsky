@@ -162,7 +162,7 @@ func TestPostBuilderAddImage(t *testing.T) {
 	if len(pb.images) != 2 || pb.images[1].Path != path {
 		t.Errorf("wanted image paths ['%s'], got %v", path, pb.images[1].Path)
 	}
-	_, err := pb.BuildFor("https://bsky.social", &http.Client{})
+	_, err := pb.buildFor("https://bsky.social", &http.Client{})
 	if err != nil {
 		t.Fatalf("wanted no error, got %v", err)
 	}

@@ -19,6 +19,7 @@ import (
 	"golang.org/x/image/draw"
 )
 
+// Client represents a client for interacting with the Bluesky server.
 type Client struct {
 	server      string
 	handle      string
@@ -47,6 +48,7 @@ func NewClient(server, handle, password string) (*Client, error) {
 	return c, nil
 }
 
+// PostBuilder is used to compose a post before sending it to the server.
 type PostBuilder struct {
 	content string
 	langs   []string
@@ -97,7 +99,7 @@ func (pb *PostBuilder) AddImageFromBytes(data []byte, alt string) *PostBuilder {
 	return pb
 }
 
-func (pb *PostBuilder) BuildFor(server string, c *http.Client) (*postRequest, error) {
+func (pb *PostBuilder) buildFor(server string, c *http.Client) (*postRequest, error) {
 	createdAt := time.Now().UTC().Format(time.RFC3339)
 	record := &record{
 		Type:      "app.bsky.feed.post",
@@ -274,7 +276,7 @@ type localImage struct {
 	Alt   string
 }
 
-// Post creates a new post with the given content.
+// Post creates a new public post with the given content.
 func (c *Client) Post(pb *PostBuilder) (string, error) {
 	err := c.auth()
 	if err != nil {
@@ -282,7 +284,7 @@ func (c *Client) Post(pb *PostBuilder) (string, error) {
 	}
 
 	url := fmt.Sprintf("%s/xrpc/com.atproto.repo.createRecord", c.server)
-	pr, err := pb.BuildFor(c.server, c.httpClient)
+	pr, err := pb.buildFor(c.server, c.httpClient)
 	if err != nil {
 		return "", fmt.Errorf("error building post request: %w", err)
 	}
@@ -372,6 +374,8 @@ func (c *Client) auth() error {
 	return err
 }
 
+// embedImagesInPost uploads images to the server and embeds them in the post record.
+// It scales images down to ensure they are under 1MiB in size.
 func (c *Client) embedImagesInPost(pb *PostBuilder, pr *postRequest) error {
 	if len(pb.images) == 0 {
 		return nil
@@ -454,6 +458,7 @@ func (c *Client) embedImagesInPost(pb *PostBuilder, pr *postRequest) error {
 	return nil
 }
 
+// scaleImage scales an image to the specified scale factor.
 func scaleImage(data []byte, scale float64) ([]byte, error) {
 	src, format, err := goimage.Decode(bytes.NewReader(data))
 	if err != nil {
