@@ -1,3 +1,7 @@
+// Package ltbsky is a lightweight posting client for Bluesky.
+//
+// It allows bots or other automated agents to create posts with text, images,
+// and language tags.
 package ltbsky
 
 import (
@@ -19,7 +23,7 @@ import (
 	"golang.org/x/image/draw"
 )
 
-// Client represents a client for interacting with the Bluesky server.
+// A Client for interacting with the Bluesky server.
 type Client struct {
 	server      string
 	handle      string
@@ -28,7 +32,8 @@ type Client struct {
 	httpClient  *http.Client
 }
 
-// NewClient creates a new Client instance with the provided server, handle, and token.
+// NewClient creates a new Client instance with the provided server, handle,
+// and token.
 func NewClient(server, handle, password string) (*Client, error) {
 	if server == "" {
 		return nil, fmt.Errorf("server cannot be empty")
