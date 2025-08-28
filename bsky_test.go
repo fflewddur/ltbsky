@@ -91,6 +91,22 @@ func TestPostWithMentions(t *testing.T) {
 	}
 }
 
+func TestPostWithTags(t *testing.T) {
+	server := newMockServer()
+	defer server.Close()
+
+	client, err := NewClient(server.URL, "test.handle", "test.password")
+	if err != nil {
+		t.Fatalf("wanted no error, got %v", err)
+	}
+	content := "Tag test: #golang #bsky"
+	pb := NewPostBuilder(content)
+	_, err = client.Post(pb)
+	if err != nil {
+		t.Fatalf("wanted no error, got %v", err)
+	}
+}
+
 func TestPostWithMentionsAndLinks(t *testing.T) {
 	server := newMockServer()
 	defer server.Close()

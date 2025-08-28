@@ -56,7 +56,7 @@ func ImageAndFacetsExample() {
 	if err != nil {
 		log.Fatalf("Error creating client: %v", err)
 	}
-	postBuilder := ltbsky.NewPostBuilder("Hello with image and facets! https://go.dev @golang.org")
+	postBuilder := ltbsky.NewPostBuilder("Hello with image and facets! https://go.dev @golang.org #golang")
 	postBuilder.AddLang("en")
 	postBuilder.AddImageFromPath("./test-data/bsky-go-1.png", "Alt text for image")
 

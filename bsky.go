@@ -127,6 +127,7 @@ func (pb *PostBuilder) buildFor(server string, c *http.Client) (*postRequest, er
 
 	pb.parseLinks()
 	pb.parseMentions(server, c)
+	pb.parseTags()
 	if len(pb.facets) > 0 {
 		record.Facets = make([]facet, len(pb.facets))
 		for i, f := range pb.facets {
@@ -224,6 +225,29 @@ func (pb *PostBuilder) parseMentions(server string, c *http.Client) {
 	}
 }
 
+func (pb *PostBuilder) parseTags() {
+	tag_regex := `[\s^](?P<tag>#[^\d\s]\S*)\b`
+	r, err := regexp.Compile(tag_regex)
+	if err != nil {
+		log.Printf("Error compiling regex: %v", err)
+		return
+	}
+	matches := r.FindAllSubmatchIndex([]byte(pb.content), -1)
+	for _, match := range matches {
+		start := match[2] // start position of the tag group
+		end := match[3]
+		tag := pb.content[start+1 : end] // +1 to skip the '#' character
+		f := &facet{
+			Features: []feature{
+				{Type: "app.bsky.richtext.facet#tag", Tag: tag},
+			},
+		}
+		f.Index.ByteStart = start
+		f.Index.ByteEnd = end
+		pb.facets = append(pb.facets, f)
+	}
+}
+
 type postRequest struct {
 	Repo       string  `json:"repo"`
 	Collection string  `json:"collection"`
@@ -252,8 +276,9 @@ type facet struct {
 
 type feature struct {
 	Type   string `json:"$type"`
-	Handle string `json:"handle,omitempty"`
 	Did    string `json:"did,omitempty"`
+	Handle string `json:"handle,omitempty"`
+	Tag    string `json:"tag,omitempty"`
 	Uri    string `json:"uri,omitempty"`
 }
 
