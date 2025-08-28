@@ -7,7 +7,7 @@ ltbsky is a lightweight library for posting to Bluesky.
 - Create a post
 - Embed images in a post
 - Specify the language(s) of a post
-- Automatically parse web links and Bluesky mentions from a post
+- Automatically parse web links, hashtags, and Bluesky mentions from a post
 - Automatically reduce image size to fit within Bluesky's 1MB limit
 
 ## Examples
@@ -73,7 +73,7 @@ To specify each language used in a post, we add a call to
 ```go
 // [continued from above]
 
-postBuilder = ltbsky.NewPostBuilder("Hello, world! Hola, mundo!")
+postBuilder = ltbsky.NewPostBuilder("Hello, world! Hola, mundo! #hello")
 postBuilder.AddLang("en") // Add English language
 postBuilder.AddLang("es") // Add Spanish language
 uri, err = client.Post(postBuilder)

@@ -272,23 +272,79 @@ func TestAddImageFromBytes(t *testing.T) {
 }
 
 func TestParseLinks(t *testing.T) {
-	content := "Hello https://go.dev and https://pkg.go.dev!"
-	pb := NewPostBuilder(content)
-	pb.parseLinks()
-	if len(pb.facets) != 2 {
-		t.Errorf("wanted 2 facets, got %d", len(pb.facets))
+	tests := []struct {
+		name        string
+		content     string
+		expectedFacets []struct {
+			ByteStart int
+			ByteEnd   int
+			Uri       string
+		}
+	}{
+		{
+			name:    "Two links",
+			content: "Hello https://go.dev and https://pkg.go.dev!",
+			expectedFacets: []struct {
+				ByteStart int
+				ByteEnd   int
+				Uri       string
+			}{
+				{ByteStart: 6, ByteEnd: 20, Uri: "https://go.dev"},
+				{ByteStart: 25, ByteEnd: 43, Uri: "https://pkg.go.dev"},
+			},
+		},
+		{
+			name:    "No links",
+			content: "Hello world!",
+			expectedFacets: []struct {
+				ByteStart int
+				ByteEnd   int
+				Uri       string
+			}{},
+		},
+		{
+			name:    "One link at start",
+			content: "https://go.dev Hello world!",
+			expectedFacets: []struct {
+				ByteStart int
+				ByteEnd   int
+				Uri       string
+			}{
+				{ByteStart: 0, ByteEnd: 14, Uri: "https://go.dev"},
+			},
+		},
+		{
+			name:    "One link at end",
+			content: "Hello world! https://go.dev",
+			expectedFacets: []struct {
+				ByteStart int
+				ByteEnd   int
+				Uri       string
+			}{
+				{ByteStart: 13, ByteEnd: 27, Uri: "https://go.dev"},
+			},
+		},
 	}
-	if pb.facets[0].Index.ByteStart != 6 || pb.facets[0].Index.ByteEnd != 20 {
-		t.Errorf("wanted first facet index [6,20], got [%d,%d]", pb.facets[0].Index.ByteStart, pb.facets[0].Index.ByteEnd)
-	}
-	if pb.facets[0].Features[0].Uri != "https://go.dev" {
-		t.Errorf("wanted first facet URI 'https://go.dev', got '%s'", pb.facets[0].Features[0].Uri)
-	}
-	if pb.facets[1].Index.ByteStart != 25 || pb.facets[1].Index.ByteEnd != 43 {
-		t.Errorf("wanted second facet index [25,43], got [%d,%d]", pb.facets[1].Index.ByteStart, pb.facets[1].Index.ByteEnd)
-	}
-	if pb.facets[1].Features[0].Uri != "https://pkg.go.dev" {
-		t.Errorf("wanted second facet URI 'https://pkg.go.dev', got '%s'", pb.facets[1].Features[0].Uri)
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			pb := NewPostBuilder(tt.content)
+			pb.parseLinks()
+
+			if len(pb.facets) != len(tt.expectedFacets) {
+				t.Errorf("wanted %d facets, got %d", len(tt.expectedFacets), len(pb.facets))
+				return
+			}
+
+			for i, expected := range tt.expectedFacets {
+				if pb.facets[i].Index.ByteStart != expected.ByteStart || pb.facets[i].Index.ByteEnd != expected.ByteEnd {
+					t.Errorf("facet %d: wanted index [%d,%d], got [%d,%d]", i, expected.ByteStart, expected.ByteEnd, pb.facets[i].Index.ByteStart, pb.facets[i].Index.ByteEnd)
+				}
+				if pb.facets[i].Features[0].Uri != expected.Uri {
+					t.Errorf("facet %d: wanted URI '%s', got '%s'", i, expected.Uri, pb.facets[i].Features[0].Uri)
+				}
+			}
+		})
 	}
 }
 

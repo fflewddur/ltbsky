@@ -146,7 +146,7 @@ func (pb *PostBuilder) buildFor(server string, c *http.Client) (*postRequest, er
 
 func (pb *PostBuilder) parseLinks() {
 	// regex based on: https://docs.bsky.app/docs/advanced-guides/posts#mentions-and-links
-	url_regex := `[$|\W](?P<url>https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*[-a-zA-Z0-9@%_\+~#//=])?)`
+	url_regex := `(?:^|\s|\W)(?P<url>https?:\/\/(www\.)?[-a-zA-Z0-9@:%._\+~#=]{1,256}\.[a-zA-Z0-9()]{1,6}\b([-a-zA-Z0-9()@:%_\+.~#?&//=]*[-a-zA-Z0-9@%_\+~#//=])?)`
 	r, err := regexp.Compile(url_regex)
 	if err != nil {
 		log.Printf("Error compiling regex: %v", err)
