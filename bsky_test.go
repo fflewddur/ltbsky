@@ -271,6 +271,70 @@ func TestAddImageFromBytes(t *testing.T) {
 	}
 }
 
+func TestParseLinks(t *testing.T) {
+	content := "Hello https://go.dev and https://pkg.go.dev!"
+	pb := NewPostBuilder(content)
+	pb.parseLinks()
+	if len(pb.facets) != 2 {
+		t.Errorf("wanted 2 facets, got %d", len(pb.facets))
+	}
+	if pb.facets[0].Index.ByteStart != 6 || pb.facets[0].Index.ByteEnd != 20 {
+		t.Errorf("wanted first facet index [6,20], got [%d,%d]", pb.facets[0].Index.ByteStart, pb.facets[0].Index.ByteEnd)
+	}
+	if pb.facets[0].Features[0].Uri != "https://go.dev" {
+		t.Errorf("wanted first facet URI 'https://go.dev', got '%s'", pb.facets[0].Features[0].Uri)
+	}
+	if pb.facets[1].Index.ByteStart != 25 || pb.facets[1].Index.ByteEnd != 43 {
+		t.Errorf("wanted second facet index [25,43], got [%d,%d]", pb.facets[1].Index.ByteStart, pb.facets[1].Index.ByteEnd)
+	}
+	if pb.facets[1].Features[0].Uri != "https://pkg.go.dev" {
+		t.Errorf("wanted second facet URI 'https://pkg.go.dev', got '%s'", pb.facets[1].Features[0].Uri)
+	}
+}
+
+func TestParseMentions(t *testing.T) {
+	// TODO: Implement a mock server response for identity resolution to fully test this.
+	// content := "Hello @itodd.dev and @golang.org!"
+	// pb := NewPostBuilder(content)
+	// pb.parseMentions()
+	// if len(pb.facets) != 2 {
+	// 	t.Errorf("wanted 2 facets, got %d", len(pb.facets))
+	// }
+	// if pb.facets[0].Index.ByteStart != 6 || pb.facets[0].Index.ByteEnd != 16 {
+	// 	t.Errorf("wanted first facet index [6,16], got [%d,%d]", pb.facets[0].Index.ByteStart, pb.facets[0].Index.ByteEnd)
+	// }
+	// if pb.facets[0].Features[0].Did != "did:example:itodd" {
+	// 	t.Errorf("wanted first facet DID 'did:example:itodd', got '%s'", pb.facets[0].Features[0].Did)
+	// }
+	// if pb.facets[1].Index.ByteStart != 21 || pb.facets[1].Index.ByteEnd != 33 {
+	// 	t.Errorf("wanted second facet index [21,33], got [%d,%d]", pb.facets[1].Index.ByteStart, pb.facets[1].Index.ByteEnd)
+	// }
+	// if pb.facets[1].Features[0].Did != "did:example:golang" {
+	// 	t.Errorf("wanted second facet DID 'did:example:golang', got '%s'", pb.facets[1].Features[0].Did)
+	// }
+}
+
+func TestParseTags(t *testing.T) {
+	content := "This is a test post with #golang and #bsky tags."
+	pb := NewPostBuilder(content)
+	pb.parseTags()
+	if len(pb.facets) != 2 {
+		t.Errorf("wanted 2 facets, got %d", len(pb.facets))
+	}
+	if pb.facets[0].Index.ByteStart != 25 || pb.facets[0].Index.ByteEnd != 32 {
+		t.Errorf("wanted first facet index [25,32], got [%d,%d]", pb.facets[0].Index.ByteStart, pb.facets[0].Index.ByteEnd)
+	}
+	if pb.facets[0].Features[0].Tag != "golang" {
+		t.Errorf("wanted first facet text 'golang', got '%s'", pb.facets[0].Features[0].Tag)
+	}
+	if pb.facets[1].Index.ByteStart != 37 || pb.facets[1].Index.ByteEnd != 42 {
+		t.Errorf("wanted second facet index [37,42], got [%d,%d]", pb.facets[1].Index.ByteStart, pb.facets[1].Index.ByteEnd)
+	}
+	if pb.facets[1].Features[0].Tag != "bsky" {
+		t.Errorf("wanted second facet text 'bsky', got '%s'", pb.facets[1].Features[0].Tag)
+	}
+}
+
 func newMockServer() *httptest.Server {
 	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
