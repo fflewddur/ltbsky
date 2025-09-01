@@ -168,9 +168,13 @@ func (pb *PostBuilder) parseLinks() {
 	}
 }
 
-func (pb *PostBuilder) parseMentions(server string, c *http.Client) {
+type HttpClient interface {
+	Do(req *http.Request) (*http.Response, error)
+}
+
+func (pb *PostBuilder) parseMentions(server string, c HttpClient) {
 	// regex based on: https://atproto.com/specs/handle#handle-identifier-syntax
-	handle_regex := `[$|\W](?P<handle>@([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)`
+	handle_regex := `(?:^|\s|\W)(?P<handle>@([a-zA-Z0-9]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?\.)+[a-zA-Z]([a-zA-Z0-9-]{0,61}[a-zA-Z0-9])?)`
 	r, err := regexp.Compile(handle_regex)
 	if err != nil {
 		log.Printf("Error compiling regex: %v", err)

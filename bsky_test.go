@@ -2,6 +2,8 @@ package ltbsky
 
 import (
 	"bytes"
+	"fmt"
+	"io"
 	"net/http"
 	"net/http/httptest"
 	"testing"
@@ -273,8 +275,8 @@ func TestAddImageFromBytes(t *testing.T) {
 
 func TestParseLinks(t *testing.T) {
 	tests := []struct {
-		name        string
-		content     string
+		name           string
+		content        string
 		expectedFacets []struct {
 			ByteStart int
 			ByteEnd   int
@@ -348,26 +350,129 @@ func TestParseLinks(t *testing.T) {
 	}
 }
 
+type mockHTTPClient struct {
+	responses map[string]string
+}
+
+func (m *mockHTTPClient) Do(req *http.Request) (*http.Response, error) {
+	if req.URL.Path == "/xrpc/com.atproto.identity.resolveHandle" {
+		handle := req.URL.Query().Get("handle")
+		if did, ok := m.responses[handle]; ok {
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Body:       io.NopCloser(bytes.NewBufferString(fmt.Sprintf(`{"did": "%s"}`, did))),
+				Header:     make(http.Header),
+			}, nil
+		}
+		return &http.Response{
+			StatusCode: http.StatusNotFound,
+			Body:       http.NoBody,
+			Header:     make(http.Header),
+		}, nil
+	}
+	return nil, nil
+}
+
 func TestParseMentions(t *testing.T) {
-	// TODO: Implement a mock server response for identity resolution to fully test this.
-	// content := "Hello @itodd.dev and @golang.org!"
-	// pb := NewPostBuilder(content)
-	// pb.parseMentions()
-	// if len(pb.facets) != 2 {
-	// 	t.Errorf("wanted 2 facets, got %d", len(pb.facets))
-	// }
-	// if pb.facets[0].Index.ByteStart != 6 || pb.facets[0].Index.ByteEnd != 16 {
-	// 	t.Errorf("wanted first facet index [6,16], got [%d,%d]", pb.facets[0].Index.ByteStart, pb.facets[0].Index.ByteEnd)
-	// }
-	// if pb.facets[0].Features[0].Did != "did:example:itodd" {
-	// 	t.Errorf("wanted first facet DID 'did:example:itodd', got '%s'", pb.facets[0].Features[0].Did)
-	// }
-	// if pb.facets[1].Index.ByteStart != 21 || pb.facets[1].Index.ByteEnd != 33 {
-	// 	t.Errorf("wanted second facet index [21,33], got [%d,%d]", pb.facets[1].Index.ByteStart, pb.facets[1].Index.ByteEnd)
-	// }
-	// if pb.facets[1].Features[0].Did != "did:example:golang" {
-	// 	t.Errorf("wanted second facet DID 'did:example:golang', got '%s'", pb.facets[1].Features[0].Did)
-	// }
+	tests := []struct {
+		name           string
+		content        string
+		mockResponses  map[string]string
+		expectedFacets []struct {
+			ByteStart int
+			ByteEnd   int
+			Did       string
+		}
+	}{
+		{
+			name:    "Two mentions",
+			content: "Hello @itodd.dev and @golang.org!",
+			mockResponses: map[string]string{
+				"itodd.dev":  "did:example:itodd",
+				"golang.org": "did:example:golang",
+			},
+			expectedFacets: []struct {
+				ByteStart int
+				ByteEnd   int
+				Did       string
+			}{
+				{ByteStart: 6, ByteEnd: 16, Did: "did:example:itodd"},
+				{ByteStart: 21, ByteEnd: 32, Did: "did:example:golang"},
+			},
+		},
+		{
+			name:    "No mentions",
+			content: "Hello world!",
+			mockResponses: map[string]string{
+				"itodd.dev": "did:example:itodd",
+			},
+			expectedFacets: []struct {
+				ByteStart int
+				ByteEnd   int
+				Did       string
+			}{},
+		},
+		{
+			name:    "One mention at start",
+			content: "@itodd.dev Hello world!",
+			mockResponses: map[string]string{
+				"itodd.dev": "did:example:itodd",
+			},
+			expectedFacets: []struct {
+				ByteStart int
+				ByteEnd   int
+				Did       string
+			}{
+				{ByteStart: 0, ByteEnd: 10, Did: "did:example:itodd"},
+			},
+		},
+		{
+			name:    "One mention at end",
+			content: "Hello world! @itodd.dev",
+			mockResponses: map[string]string{
+				"itodd.dev": "did:example:itodd",
+			},
+			expectedFacets: []struct {
+				ByteStart int
+				ByteEnd   int
+				Did       string
+			}{
+				{ByteStart: 13, ByteEnd: 23, Did: "did:example:itodd"},
+			},
+		},
+		{
+			name:          "Unresolved mention",
+			content:       "Hello @unknown.dev!",
+			mockResponses: map[string]string{},
+			expectedFacets: []struct {
+				ByteStart int
+				ByteEnd   int
+				Did       string
+			}{},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			c := &mockHTTPClient{responses: tt.mockResponses}
+			pb := NewPostBuilder(tt.content)
+			pb.parseMentions("", c)
+
+			if len(pb.facets) != len(tt.expectedFacets) {
+				t.Errorf("wanted %d facets, got %d", len(tt.expectedFacets), len(pb.facets))
+				return
+			}
+
+			for i, expected := range tt.expectedFacets {
+				if pb.facets[i].Index.ByteStart != expected.ByteStart || pb.facets[i].Index.ByteEnd != expected.ByteEnd {
+					t.Errorf("facet %d: wanted index [%d,%d], got [%d,%d]", i, expected.ByteStart, expected.ByteEnd, pb.facets[i].Index.ByteStart, pb.facets[i].Index.ByteEnd)
+				}
+				if pb.facets[i].Features[0].Did != expected.Did {
+					t.Errorf("facet %d: wanted DID '%s', got '%s'", i, expected.Did, pb.facets[i].Features[0].Did)
+				}
+			}
+		})
+	}
 }
 
 func TestParseTags(t *testing.T) {
