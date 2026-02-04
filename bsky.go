@@ -352,15 +352,19 @@ func (c *Client) Post(pb *PostBuilder) (string, error) {
 		return "", fmt.Errorf("error reading response body: %w", err)
 	}
 	var postResponse struct {
-		Uri   string `json:"uri"`
-		Cid   string `json:"cid"`
-		Error string `json:"error,omitempty"`
+		// Success
+		Uri string `json:"uri"`
+		Cid string `json:"cid"`
+
+		// Error
+		Error   string `json:"error"`
+		Message string `json:"message"`
 	}
 	if err := json.Unmarshal(b, &postResponse); err != nil {
 		return "", fmt.Errorf("error unmarshaling response: %w", err)
 	}
 	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("post failed with status code: %d (%s) error: %s", resp.StatusCode, resp.Status, postResponse.Error)
+		return "", fmt.Errorf("post failed with status code: %d (%s) error: %s message: %s", resp.StatusCode, resp.Status, postResponse.Error, postResponse.Message)
 	}
 	return postResponse.Uri, nil
 }
