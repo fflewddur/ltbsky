@@ -462,16 +462,24 @@ func (c *Client) embedImagesInPost(pb *PostBuilder, pr *postRequest) error {
 		if err != nil {
 			return fmt.Errorf("error reading upload response body: %w", err)
 		}
-		blob := struct {
+		var uploadResponse struct {
+			// Success
 			Blob imageEmbed `json:"blob"`
-		}{}
-		if err := json.Unmarshal(b, &blob); err != nil {
+
+			// Error
+			Error   string `json:"error"`
+			Message string `json:"message"`
+		}
+		if err := json.Unmarshal(b, &uploadResponse); err != nil {
 			return fmt.Errorf("error unmarshaling upload response: %w", err)
+		}
+		if resp.StatusCode != http.StatusOK {
+			return fmt.Errorf("upload of %+v failed with status code: %d (%s) error: %s message: %s", img, resp.StatusCode, resp.Status, uploadResponse.Error, uploadResponse.Message)
 		}
 
 		// Create the JSON object for this image
 		image := &image{
-			Image: &blob.Blob,
+			Image: &uploadResponse.Blob,
 			Alt:   img.Alt,
 			AspectRatio: &struct {
 				Width  int `json:"width"`
