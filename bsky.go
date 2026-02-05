@@ -310,6 +310,10 @@ type localImage struct {
 	Alt   string
 }
 
+func (l *localImage) String() string {
+	return fmt.Sprintf("localImage{Path: %q, Bytes: []byte len=%d, Alt: %q}", l.Path, len(l.Bytes), l.Alt)
+}
+
 // Post creates a new public post with the given content.
 func (c *Client) Post(pb *PostBuilder) (string, error) {
 	err := c.auth()
@@ -474,7 +478,7 @@ func (c *Client) embedImagesInPost(pb *PostBuilder, pr *postRequest) error {
 			return fmt.Errorf("error unmarshaling upload response: %w", err)
 		}
 		if resp.StatusCode != http.StatusOK {
-			return fmt.Errorf("upload of %+v failed with status code: %d (%s) error: %s message: %s", img, resp.StatusCode, resp.Status, uploadResponse.Error, uploadResponse.Message)
+			return fmt.Errorf("upload of %s failed with status code: %d (%s) error: %s message: %s", img, resp.StatusCode, resp.Status, uploadResponse.Error, uploadResponse.Message)
 		}
 
 		// Create the JSON object for this image
